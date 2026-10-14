@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use p02_fetch::{FetchError, FetchOutcome, FetchRequest, ResponseMeta};
 use p02_parse::{ParsedFeed, parse_feed};
-use p02_store::testing::{API_LOGIN, TestDatabase, WORKER_LOGIN};
+use p02_store::testing::{API_LOGIN, BOOTSTRAP, TestDatabase, WORKER_LOGIN};
 use p02_worker::parse::{Parse, ParseFailure};
 use p02_worker::{Fetch, FetchFuture, Processed, WorkerSettings, process_one};
 use serde_json::json;
@@ -242,4 +242,32 @@ async fn a_page_body_is_not_parsed() {
     )
     .await;
     assert!(parse.is_empty(), "a page body carries no parse record");
+}
+
+/// A failed write of the parse record rolls the whole completion back: the job
+/// stays unfinished and no item survives, so a retry cannot double them.
+#[tokio::test]
+async fn a_failed_parse_record_leaves_no_items_and_no_finished_job() {
+    let database = TestDatabase::start().await;
+    enqueue(&database, "job-atomic", SOURCE, "feed").await;
+    // A parse record already present makes the worker's insert fail.
+    let bootstrap = database.connect(BOOTSTRAP).await;
+    bootstrap
+        .execute(
+            "INSERT INTO p02.feed_parses (tenant_id, job_id, status, refusal, item_count) VALUES ($1, 'job-atomic', 'parsed', NULL, 0)",
+            &[&TENANT],
+        )
+        .await
+        .unwrap();
+
+    let mut worker = database.connect(WORKER_LOGIN).await;
+    let fetcher = Always(RSS.as_bytes().to_vec());
+    let outcome = process_one(&mut worker, &fetcher, &InProcess, &settings()).await;
+    assert!(
+        outcome.is_err(),
+        "the duplicate parse record must fail the write"
+    );
+
+    assert_ne!(job_state(&database, "job-atomic").await, "succeeded");
+    assert!(item_ids(&database, "job-atomic").await.is_empty());
 }
