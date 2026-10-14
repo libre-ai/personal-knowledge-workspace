@@ -18,6 +18,7 @@
 
 pub mod isolation;
 mod sanitize;
+mod xml_encoding;
 
 use std::io;
 
@@ -68,6 +69,10 @@ pub enum ParseRefusal {
 pub fn parse_feed(body: &[u8]) -> Result<ParsedFeed, ParseRefusal> {
     if body.len() > FEED_BYTES_CEILING {
         return Err(ParseRefusal::TooLarge);
+    }
+    // Before feed-rs: its XML reader panics on an encoding switch (see the module).
+    if !xml_encoding::is_supported(body) {
+        return Err(ParseRefusal::Unsupported);
     }
     let feed = feed_rs::parser::parse(io::Cursor::new(body)).map_err(refusal_of)?;
     if feed.entries.len() > MAX_ITEMS {
