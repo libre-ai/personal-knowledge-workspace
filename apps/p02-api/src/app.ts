@@ -206,7 +206,7 @@ async function readItems(
     const parse = parses[0];
     return Response.json(
       {
-        data: page.map((row) => ({
+        data: page.map((row: Record<string, unknown>) => ({
           itemId: row.item_id,
           position: row.position,
           title: row.title,

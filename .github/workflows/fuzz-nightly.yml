@@ -30,3 +30,8 @@ jobs:
         run: |
           cargo +nightly fuzz run parse_feed ../tests/fixtures -- \
             -max_total_time=900 -max_len=65536
+      - name: Fuzz the p02-job-v1 document decoder for a fixed budget
+        working-directory: crates/p02-domain/fuzz
+        run: |
+          cargo +nightly fuzz run parse_document -- \
+            -max_total_time=300 -max_len=65536
