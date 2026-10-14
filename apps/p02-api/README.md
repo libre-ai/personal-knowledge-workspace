@@ -27,6 +27,8 @@ ceremony that will mint them is task S0.4 and is not implemented.
 | `POST` | `/v1/jobs` | `201` new, `200` replay | Enqueue a `fetch-source` command. |
 | `GET` | `/v1/jobs/:jobId` | `200` | Read state, attempts and result of one job. |
 | `GET` | `/v1/jobs/:jobId/items` | `200` | Read the parsed items of one job, one page at a time. |
+| `POST` | `/v1/sources` | `201` new, `200` replay | Schedule a feed to be fetched every `intervalSeconds`. |
+| `GET` | `/v1/sources/:sourceId` | `200` | Read one scheduled source and its next run. |
 
 Any other method on these paths returns `405`; any other path returns `404`.
 
@@ -81,6 +83,42 @@ database policy hides it, so the API cannot tell the two apart.
 `result` is `null` until the worker records a `p02-job-v1` result, which
 carries the final hop, the HTTP status, and the BLAKE3 digest of the body. It
 never carries the content.
+
+### `POST /v1/sources`
+
+Requires `Idempotency-Key`. Body, closed (no other field is accepted):
+
+```json
+{ "url": "https://feeds.example.org/atom.xml", "intervalSeconds": 3600 }
+```
+
+- `url` must be a `fetch-source` URL the contract accepts (http or https, no
+  credentials, at most 2048 characters). A URL the contract refuses returns
+  `422 p02.source_invalid`, so the worker never claims a job it must refuse.
+- `intervalSeconds` is an integer from 300 (five minutes) to 86400 (one day).
+- The first run is due now. The worker enqueues one job per due instant; a
+  schedule that was down for hours produces one job, not one per missed
+  interval, and its next run is one interval from the moment it recovers.
+- A replay with the same key returns the same source (`200`); another body
+  under that key returns `409 p02.idempotency_conflict`.
+
+```json
+{
+  "data": {
+    "scheduleId": "src-…",
+    "url": "https://feeds.example.org/atom.xml",
+    "intervalSeconds": 3600,
+    "nextRunAt": "2026-10-14T08:00:00.000Z",
+    "lastJobId": null
+  },
+  "meta": {}
+}
+```
+
+The scheduled job of an instant has a deterministic identity, derived from the
+schedule and that instant. An interruption between the job's creation and the
+advance of the schedule cannot yield two jobs for the same instant, because the
+two writes share one transaction.
 
 ### `GET /v1/jobs/:jobId/items`
 

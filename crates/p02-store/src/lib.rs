@@ -12,6 +12,7 @@ mod error;
 pub mod items;
 pub mod migrate;
 pub mod queue;
+pub mod schedules;
 mod tenant;
 #[cfg(feature = "testing")]
 pub mod testing;

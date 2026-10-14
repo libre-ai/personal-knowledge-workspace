@@ -8,7 +8,7 @@ use std::time::Duration;
 use p02_fetch::{FetcherConfig, SafeFetcher};
 use p02_worker::config::database_config;
 use p02_worker::parse::IsolatedParser;
-use p02_worker::{Processed, WorkerSettings, process_one};
+use p02_worker::{Processed, WorkerSettings, process_one, run_due};
 use tokio_postgres::{Client, NoTls};
 
 const IDLE_POLL: Duration = Duration::from_secs(1);
@@ -83,6 +83,11 @@ async fn run(client: &mut Client, worker: std::path::PathBuf) -> ExitCode {
     let parser = IsolatedParser::new(worker);
     let settings = WorkerSettings::default();
     loop {
+        // Due schedules become jobs first, so a due fetch is claimed in the
+        // same pass. A failure here is logged and the loop carries on.
+        if let Err(error) = run_due(client).await {
+            eprintln!("p02-worker: schedule store error: {error}");
+        }
         let step = tokio::select! {
             step = process_one(client, &fetcher, &parser, &settings) => step,
             _ = tokio::signal::ctrl_c() => return ExitCode::SUCCESS,

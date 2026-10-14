@@ -1224,6 +1224,7 @@ dependencies = [
 name = "p02-store"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "p02-store",
  "serde_json",
  "sha2",

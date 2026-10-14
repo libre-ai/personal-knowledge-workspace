@@ -137,6 +137,41 @@ pub async fn process_one(
     }
 }
 
+/// Enqueue one job for every scheduled fetch that has come due. Returns how
+/// many jobs were enqueued. A schedule another worker already advanced is
+/// skipped by the store, so running this on several workers is safe.
+pub async fn run_due(client: &mut Client) -> Result<usize, StoreError> {
+    let now = rfc3339_now();
+    let mut enqueued = 0;
+    for due in p02_store::schedules::due(client).await? {
+        let build =
+            |scheduled: &p02_store::schedules::Scheduled| scheduled_command(&now, scheduled);
+        if p02_store::schedules::enqueue_due(client, &due, build).await? {
+            enqueued += 1;
+        }
+    }
+    Ok(enqueued)
+}
+
+/// The p02-job-v1 command of one scheduled fetch. Its body kind is always
+/// `feed`: a schedule exists to keep a feed current.
+fn scheduled_command(enqueued_at: &str, scheduled: &p02_store::schedules::Scheduled) -> Value {
+    serde_json::json!({
+        "schemaVersion": "libre-ai.p02-job.v1",
+        "kind": "command",
+        "jobId": scheduled.job_id,
+        "tenantId": scheduled.tenant,
+        "idempotencyKey": scheduled.idempotency_key,
+        "enqueuedAt": enqueued_at,
+        "operation": {
+            "type": "fetch-source",
+            "sourceId": scheduled.schedule_id,
+            "url": scheduled.url,
+            "bodyKind": "feed"
+        }
+    })
+}
+
 /// The command, if it is a valid p02-job-v1 command for exactly this claim.
 fn command_for(claim: &Claim, raw: &Value) -> Option<JobCommand> {
     let bytes = serde_json::to_vec(raw).ok()?;
