@@ -47,3 +47,44 @@ pub(crate) fn dedupe(addresses: Vec<IpAddr>) -> Vec<IpAddr> {
     }
     unique
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr};
+
+    use super::{Resolver, SystemResolver, dedupe};
+
+    // The operating system resolves `localhost` without network access, so the
+    // test stays deterministic in CI and in a sandbox.
+    #[tokio::test]
+    async fn system_resolver_answers_localhost_with_loopback() {
+        let answer = SystemResolver
+            .resolve("localhost")
+            .await
+            .expect("localhost resolves");
+
+        assert!(
+            !answer.is_empty(),
+            "localhost must have at least one address"
+        );
+        assert!(
+            answer.iter().all(IpAddr::is_loopback),
+            "localhost must resolve to loopback only, got {answer:?}"
+        );
+    }
+
+    #[test]
+    fn dedupe_keeps_first_occurrence_order() {
+        let a = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));
+        let b = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 2));
+        let c = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 3));
+
+        assert_eq!(dedupe(vec![b, a, b, c, a]), vec![b, a, c]);
+    }
+
+    #[test]
+    fn dedupe_of_empty_answer_is_empty() {
+        assert!(dedupe(Vec::new()).is_empty());
+    }
+}
