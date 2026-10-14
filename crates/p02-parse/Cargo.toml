@@ -1,0 +1,26 @@
+[package]
+name = "p02-parse"
+version = "0.1.0"
+description = "P02 feed parsing: RSS, Atom and JSON Feed normalised and sanitised into typed items, with typed refusals, run in an isolated worker process"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "p02-parse-worker"
+path = "src/bin/p02-parse-worker.rs"
+
+[dependencies]
+ammonia.workspace = true
+chrono.workspace = true
+feed-rs.workspace = true
+mediatype.workspace = true
+rustix.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

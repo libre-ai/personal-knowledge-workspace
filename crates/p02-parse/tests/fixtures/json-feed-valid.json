@@ -1,0 +1,13 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "Synthetic JSON feed",
+  "items": [
+    {
+      "id": "json-1",
+      "url": "https://feeds.example.org/json/1",
+      "title": "JSON item",
+      "summary": "Short <i>summary</i>",
+      "date_published": "2026-10-13T06:00:00Z"
+    }
+  ]
+}
