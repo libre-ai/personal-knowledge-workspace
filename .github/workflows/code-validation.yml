@@ -37,5 +37,5 @@ jobs:
           tool: cargo-llvm-cov
       - name: Measure and gate P02 line coverage
         run: |
-          cargo llvm-cov -p p02-domain -p p02-fetch -p p02-store -p p02-worker \
+          cargo llvm-cov -p p02-domain -p p02-fetch -p p02-parse -p p02-store -p p02-worker \
             --locked --summary-only --fail-under-lines 90
