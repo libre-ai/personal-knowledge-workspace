@@ -1,0 +1,25 @@
+# Coverage-guided fuzzing of `p02_domain::job::parse_document`, the decoder of
+# every p02-job-v1 document the worker reads from the database. Standalone
+# workspace: needs a nightly toolchain for the libFuzzer runtime.
+
+[package]
+name = "p02-domain-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+p02-domain = { path = ".." }
+
+[[bin]]
+name = "parse_document"
+path = "fuzz_targets/parse_document.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
