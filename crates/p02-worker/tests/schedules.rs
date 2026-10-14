@@ -321,3 +321,28 @@ async fn the_worker_reads_all_schedules_but_writes_only_its_own_tenant() {
     .await;
     assert!(url.is_err(), "the worker must not rewrite a schedule's URL");
 }
+
+// Two workers racing on the same due schedule must enqueue exactly one job:
+// the row lock (FOR UPDATE SKIP LOCKED) and the due check inside it decide.
+#[tokio::test]
+async fn two_workers_racing_for_one_due_schedule_enqueue_one_job() {
+    for round in 0..5 {
+        let database = TestDatabase::start().await;
+        let id = format!("feed-race-{round}");
+        schedule(&database, &id, "-1 second", 300).await;
+        let mut first = database.connect(WORKER_LOGIN).await;
+        let mut second = database.connect(WORKER_LOGIN).await;
+
+        let (a, b) = tokio::join!(run_due(&mut first), run_due(&mut second));
+        let total = a.unwrap() + b.unwrap();
+        assert_eq!(
+            total, 1,
+            "round {round}: exactly one job for one due instant"
+        );
+        assert_eq!(
+            jobs(&database).await.len(),
+            1,
+            "round {round}: one stored job"
+        );
+    }
+}
