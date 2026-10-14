@@ -15,11 +15,16 @@ export default defineConfig({
       use: { ...devices["Desktop Firefox"] },
     },
     {
-      // Linux's bundled WebKit lacks StorageManager.estimate; verify its closed refusal.
-      // macOS keeps every positive backup/restore assertion against the capable WebKit port.
-      name: process.platform === "linux" ? "webkit-linux-refusal" : "webkit",
-      testMatch:
-        process.platform === "linux" ? /linux-storage-refusal\.e2e\.ts/ : /backup-host\.e2e\.ts/,
+      // Playwright 1.64's Linux WebKit exposes StorageManager.estimate (measured in CI), so
+      // every platform runs the positive backup/restore suite against WebKit.
+      name: "webkit",
+      testMatch: /backup-host\.e2e\.ts/,
+      use: { ...devices["Desktop Safari"] },
+    },
+    {
+      // Closed refusal when the capability is absent: the spec deletes estimate before load.
+      name: "webkit-storage-estimate-removed",
+      testMatch: /storage-estimate-removed\.e2e\.ts/,
       use: { ...devices["Desktop Safari"] },
     },
     {
