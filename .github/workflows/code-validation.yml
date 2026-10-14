@@ -15,3 +15,27 @@ jobs:
       target: personal-knowledge-workspace
       target_ref: ${{ github.sha }}
       tooling_ref: 1c8b37c80beb41f640982768ec27304a911e0b8e
+
+  # NFR-18: line coverage of the P02 crates is measured and blocks below the
+  # floor. The floor sits under the measured value (95.6% on 2026-10-14) so
+  # that a regression is caught without making ordinary refactors fragile.
+  p02-coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install Rust compiler with coverage instrumentation
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.97.0
+          components: llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8
+        with:
+          tool: cargo-llvm-cov
+      - name: Measure and gate P02 line coverage
+        run: |
+          cargo llvm-cov -p p02-domain -p p02-fetch -p p02-store -p p02-worker \
+            --locked --summary-only --fail-under-lines 90
