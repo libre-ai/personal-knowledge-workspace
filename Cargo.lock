@@ -1237,8 +1237,10 @@ name = "p02-worker"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "chrono",
  "p02-domain",
  "p02-fetch",
+ "p02-parse",
  "p02-store",
  "serde_json",
  "thiserror",

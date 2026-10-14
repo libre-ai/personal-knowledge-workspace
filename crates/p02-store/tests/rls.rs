@@ -34,7 +34,9 @@ async fn runtime_roles_carry_no_bypass() {
         .unwrap();
     let (forced, tables): (bool, i64) = (row.get(0), row.get(1));
     assert!(forced, "every p02 table forces row-level security");
-    assert_eq!(tables, 3, "tables inspected");
+    // jobs, job_dispatch, sessions, feed_parses, items: a new table must be
+    // added here on purpose, so an unprotected table cannot slip in unseen.
+    assert_eq!(tables, 5, "tables inspected");
 }
 
 #[tokio::test]

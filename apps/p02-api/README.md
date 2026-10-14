@@ -26,6 +26,7 @@ ceremony that will mint them is task S0.4 and is not implemented.
 | `GET` | `/v1/health` | `200` | Liveness. No authentication. |
 | `POST` | `/v1/jobs` | `201` new, `200` replay | Enqueue a `fetch-source` command. |
 | `GET` | `/v1/jobs/:jobId` | `200` | Read state, attempts and result of one job. |
+| `GET` | `/v1/jobs/:jobId/items` | `200` | Read the parsed items of one job, one page at a time. |
 
 Any other method on these paths returns `405`; any other path returns `404`.
 
@@ -80,6 +81,47 @@ database policy hides it, so the API cannot tell the two apart.
 `result` is `null` until the worker records a `p02-job-v1` result, which
 carries the final hop, the HTTP status, and the BLAKE3 digest of the body. It
 never carries the content.
+
+### `GET /v1/jobs/:jobId/items`
+
+Query: `limit` (integer 1 to 200, default 50) and `cursor` (the `nextCursor`
+of the previous page; omit it for the first page).
+
+```json
+{
+  "data": [
+    {
+      "itemId": "3f2a…",
+      "position": 0,
+      "title": "First",
+      "link": "https://feeds.example.org/a",
+      "summaryHtml": "<p>Lead text</p>",
+      "publishedAt": "2026-10-01T08:00:00.000Z",
+      "updatedAt": null
+    }
+  ],
+  "meta": {
+    "state": "succeeded",
+    "parse": { "status": "parsed", "refusal": null },
+    "nextCursor": "49"
+  }
+}
+```
+
+- `itemId` is the canonical identity: 64 lowercase hex characters, derived from
+  the source URL and the item's link (else its title and publication time).
+  It is stable across fetches of the same feed; the same article fetched by
+  two jobs is two items until cross-job deduplication lands.
+- `parse` is `null` while the job has no parse record yet (queued or running).
+  A refused parse has `status: "refused"` and a `refusal` code: `too_large`,
+  `too_many_items`, `malformed`, `unsupported`, or `worker_failed` (the parser
+  could not answer; no content is recorded).
+- `summaryHtml` is sanitised by the worker before storage, with an allowlist of
+  tags. Clients must still render it as HTML only through a sanitiser of their
+  own, not as trusted markup.
+- A job of another tenant, or an unknown job, returns `404`. A malformed
+  `limit` or `cursor` returns `400` with `p02.limit_invalid` or
+  `p02.cursor_invalid`.
 
 ## Refusals
 

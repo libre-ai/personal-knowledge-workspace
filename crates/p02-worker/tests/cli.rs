@@ -27,7 +27,7 @@ async fn migrate_verifies_an_already_migrated_database() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "p02-worker: migrations verified=2 applied=0\n"
+        "p02-worker: migrations verified=3 applied=0\n"
     );
 }
 
@@ -66,9 +66,12 @@ async fn run_idles_on_an_empty_queue_and_exits_cleanly_on_interrupt() {
         "host={} dbname=p02 user={WORKER_LOGIN}",
         database.socket_dir().display()
     );
+    // The idle loop never parses, so any existing file satisfies the parser
+    // path check; production points it at `p02-parse-worker`.
     let child = Command::new(BINARY)
         .arg("run")
         .env("P02_DATABASE_URL", &url)
+        .env("P02_PARSE_WORKER", BINARY)
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
@@ -82,4 +85,19 @@ async fn run_idles_on_an_empty_queue_and_exits_cleanly_on_interrupt() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     assert!(!stderr.contains("store error"), "{stderr}");
+}
+
+// `run` refuses to start without an absolute path to the parser binary: a
+// worker that cannot parse must not claim jobs it would then fail.
+#[test]
+fn run_refuses_to_start_without_a_parser_binary() {
+    let database_url = "host=/nonexistent dbname=p02 user=p02_worker_login";
+    let output = Command::new(BINARY)
+        .arg("run")
+        .env("P02_DATABASE_URL", database_url)
+        .env("P02_PARSE_WORKER", "relative/p02-parse-worker")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("P02_PARSE_WORKER"));
 }

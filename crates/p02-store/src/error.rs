@@ -15,6 +15,8 @@ pub enum StoreError {
     LeaseLost,
     #[error("the job row is missing or unreadable in its tenant context")]
     JobMissing,
+    #[error("the parsed items exceed the per-job ceiling")]
+    TooManyItems,
 }
 
 impl From<tokio_postgres::Error> for StoreError {

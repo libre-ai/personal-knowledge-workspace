@@ -15,6 +15,10 @@ export const MAX_BODY_BYTES = 16 * 1024;
 const BEARER = /^Bearer ([A-Za-z0-9_-]{32,256})$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const JOB_ROUTE = /^\/v1\/jobs\/([a-z][a-z0-9_-]{2,127})$/;
+const JOB_ITEMS_ROUTE = /^\/v1\/jobs\/([a-z][a-z0-9_-]{2,127})\/items$/;
+const DEFAULT_PAGE = 50;
+const MAX_PAGE = 200;
+const CURSOR = /^(?:0|[1-9][0-9]{0,3})$/;
 
 export interface AppDependencies {
   /** A pool connected as a login member of `p02_api`. */
@@ -133,6 +137,67 @@ async function readJob(deps: AppDependencies, tenant: string, jobId: string): Pr
   });
 }
 
+/**
+ * The parsed items of one job, in feed order, one page at a time. The cursor
+ * is the position of the last item returned; it is opaque to clients by
+ * contract, though its value is only a number.
+ */
+async function readItems(
+  deps: AppDependencies,
+  tenant: string,
+  jobId: string,
+  query: URLSearchParams,
+): Promise<Response> {
+  const requested = query.get("limit");
+  const limit = requested === null ? DEFAULT_PAGE : Number(requested);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) {
+    return problem(400, "p02.limit_invalid", `limit must be an integer from 1 to ${MAX_PAGE}.`);
+  }
+  const cursorText = query.get("cursor");
+  if (cursorText !== null && !CURSOR.test(cursorText)) {
+    return problem(400, "p02.cursor_invalid", "The cursor is malformed.");
+  }
+  const after = cursorText === null ? -1 : Number(cursorText);
+  return withTenant(deps.sql, tenant, async (tx) => {
+    const jobs = await tx`SELECT state FROM p02.jobs WHERE job_id = ${jobId}`;
+    if (jobs.length === 0) return problem(404, "p02.not_found", "No such resource.");
+    const parses = await tx`SELECT status, refusal FROM p02.feed_parses WHERE job_id = ${jobId}`;
+    // One row beyond the page tells whether another page exists.
+    const rows = await tx`
+      SELECT position, item_id, title, link, summary_html, published_at, updated_at
+      FROM p02.items
+      WHERE job_id = ${jobId} AND position > ${after}
+      ORDER BY position
+      LIMIT ${limit + 1}`;
+    const page = rows.slice(0, limit);
+    const last = page.at(-1);
+    const parse = parses[0];
+    return Response.json(
+      {
+        data: page.map((row) => ({
+          itemId: row.item_id,
+          position: row.position,
+          title: row.title,
+          link: row.link,
+          summaryHtml: row.summary_html,
+          publishedAt: isoOrNull(row.published_at),
+          updatedAt: isoOrNull(row.updated_at),
+        })),
+        meta: {
+          state: jobs[0].state,
+          parse: parse ? { status: parse.status, refusal: parse.refusal } : null,
+          nextCursor: rows.length > limit && last ? String(last.position) : null,
+        },
+      },
+      { headers: { "cache-control": "no-store" } },
+    );
+  });
+}
+
+function isoOrNull(value: unknown): string | null {
+  return value instanceof Date ? value.toISOString() : null;
+}
+
 export function createApp(deps: AppDependencies): { handle(request: Request): Promise<Response> } {
   async function route(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url);
@@ -140,6 +205,15 @@ export function createApp(deps: AppDependencies): { handle(request: Request): Pr
       return request.method === "GET"
         ? envelope(200, { status: "ok" })
         : problem(405, "p02.method_not_allowed", "Method not allowed.");
+    }
+    const itemsMatch = JOB_ITEMS_ROUTE.exec(pathname);
+    if (itemsMatch) {
+      if (request.method !== "GET") {
+        return problem(405, "p02.method_not_allowed", "Method not allowed.");
+      }
+      const tenant = await authenticate(deps.sql, request);
+      if (tenant === null) return unauthenticated();
+      return readItems(deps, tenant, itemsMatch[1] ?? "", new URL(request.url).searchParams);
     }
     const jobMatch = JOB_ROUTE.exec(pathname);
     const isJobs = pathname === "/v1/jobs";

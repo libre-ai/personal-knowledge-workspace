@@ -6,7 +6,9 @@
 //! transient failure goes back to the queue until `max_claims` is reached.
 //! The worker never logs a URL, a host, a header or a body (G8).
 
+pub mod canonical;
 pub mod config;
+pub mod parse;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -17,8 +19,11 @@ use p02_domain::job::{
     ReasonCode, ResultKind, SchemaVersion, Status,
 };
 use p02_fetch::{FetchError, FetchOutcome, FetchRequest, ResponseMeta, SafeFetcher};
+use p02_parse::ParseRefusal;
 use p02_store::StoreError;
+use p02_store::items::{self, ParseRecord, Refusal};
 use p02_store::queue::{self, Claim, Terminal};
+use parse::{Parse, ParseFailure};
 use serde_json::Value;
 use tokio_postgres::Client;
 
@@ -73,10 +78,12 @@ pub enum Processed {
     Retried,
 }
 
-/// Process at most one ready job.
+/// Process at most one ready job. A fetched feed body is parsed with `parser`
+/// and its items are stored in the same transaction as the job's result.
 pub async fn process_one(
     client: &mut Client,
     fetcher: &dyn Fetch,
+    parser: &dyn Parse,
     settings: &WorkerSettings,
 ) -> Result<Processed, StoreError> {
     let Some(claim) = queue::claim(client, &settings.worker_id, settings.lease).await? else {
@@ -109,7 +116,13 @@ pub async fn process_one(
     match fetcher.fetch(&request).await {
         Ok(outcome) => {
             let result = outcome_result(&claim, &outcome);
-            finish(client, &claim, &result).await
+            match (&outcome, command.operation.body_kind) {
+                (FetchOutcome::Body { body, .. }, job::BodyKind::Feed) => {
+                    let record = parse_record(parser, &command.operation.url, body);
+                    finish_with_items(client, &claim, &result, &record).await
+                }
+                _ => finish(client, &claim, &result).await,
+            }
         }
         Err(error) => {
             let code = reason_for(error);
@@ -142,8 +155,32 @@ async fn finish(
     claim: &Claim,
     result: &JobResult,
 ) -> Result<Processed, StoreError> {
-    // A result that would not pass the contract is not written as is: the
-    // job is refused instead, which always validates.
+    let (document, terminal) = checked(claim, result)?;
+    queue::complete(client, claim, terminal, &document).await?;
+    Ok(Processed::Completed)
+}
+
+async fn finish_with_items(
+    client: &mut Client,
+    claim: &Claim,
+    result: &JobResult,
+    record: &ParseRecord,
+) -> Result<Processed, StoreError> {
+    let (document, terminal) = checked(claim, result)?;
+    // Items belong to a successful fetch only: a job that ends otherwise
+    // stores no parse record and no items.
+    if terminal != Terminal::Succeeded {
+        queue::complete(client, claim, terminal, &document).await?;
+        return Ok(Processed::Completed);
+    }
+    items::complete_with_parse(client, claim, terminal, &document, record).await?;
+    Ok(Processed::Completed)
+}
+
+/// The result document and its terminal state, once the result has passed the
+/// contract. A result that would not pass is replaced by a refusal, which
+/// always validates.
+fn checked(claim: &Claim, result: &JobResult) -> Result<(Value, Terminal), StoreError> {
     let result = match result.validate() {
         Ok(()) => result.clone(),
         Err(_) => reason_result(claim, ReasonCode::FetchUrlInvalid),
@@ -154,8 +191,22 @@ async fn finish(
         Status::Failed => Terminal::Failed,
     };
     let document = serde_json::to_value(&result).map_err(|_| StoreError::JobMissing)?;
-    queue::complete(client, claim, terminal, &document).await?;
-    Ok(Processed::Completed)
+    Ok((document, terminal))
+}
+
+/// Parse a fetched body into a parse record. The source URL is the command's
+/// URL, the subscription the items belong to.
+fn parse_record(parser: &dyn Parse, source_url: &str, body: &[u8]) -> ParseRecord {
+    match parser.parse(body) {
+        Ok(feed) => ParseRecord::Parsed(canonical::item_rows(source_url, &feed.items)),
+        Err(ParseFailure::Refused(refusal)) => ParseRecord::Refused(match refusal {
+            ParseRefusal::TooLarge => Refusal::TooLarge,
+            ParseRefusal::TooManyItems => Refusal::TooManyItems,
+            ParseRefusal::Malformed => Refusal::Malformed,
+            ParseRefusal::Unsupported => Refusal::Unsupported,
+        }),
+        Err(ParseFailure::WorkerFailed) => ParseRecord::Refused(Refusal::WorkerFailed),
+    }
 }
 
 fn base_result(claim: &Claim, status: Status) -> JobResult {

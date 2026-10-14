@@ -9,6 +9,7 @@
 //!   the result inside that job's tenant context only.
 
 mod error;
+pub mod items;
 pub mod migrate;
 pub mod queue;
 mod tenant;

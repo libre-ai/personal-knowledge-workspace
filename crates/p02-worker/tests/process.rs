@@ -11,12 +11,24 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use p02_fetch::{FetchError, FetchOutcome, FetchRequest, FetcherConfig, ResponseMeta, SafeFetcher};
+use p02_parse::{ParsedFeed, parse_feed};
 use p02_store::testing::{API_LOGIN, TestDatabase, WORKER_LOGIN};
+use p02_worker::parse::{Parse, ParseFailure};
 use p02_worker::{Fetch, FetchFuture, Processed, WorkerSettings, process_one};
 use serde_json::{Value, json};
 use url::Url;
 
 const TENANT: &str = "ten_aaaaaaaaaaaaaaaa";
+
+/// Parses in this test process. Only the test harness does this: production
+/// parses in the isolated worker (see `p02_worker::parse::IsolatedParser`).
+struct InProcess;
+
+impl Parse for InProcess {
+    fn parse(&self, body: &[u8]) -> Result<ParsedFeed, ParseFailure> {
+        parse_feed(body).map_err(ParseFailure::Refused)
+    }
+}
 
 struct Scripted {
     replies: Mutex<Vec<Result<FetchOutcome, FetchError>>>,
@@ -136,7 +148,7 @@ async fn an_empty_queue_is_idle() {
     let mut worker = database.connect(WORKER_LOGIN).await;
     let fetcher = Scripted::new(vec![]);
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Idle
@@ -154,7 +166,7 @@ async fn a_fetched_body_is_recorded_as_a_contract_result_with_its_digest() {
         body: body.clone().into(),
     })]);
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Completed
@@ -197,7 +209,7 @@ async fn a_not_modified_and_a_404_are_successful_outcomes_without_body() {
     ]);
     for _ in 0..2 {
         assert_eq!(
-            process_one(&mut worker, &fetcher, &settings())
+            process_one(&mut worker, &fetcher, &InProcess, &settings())
                 .await
                 .unwrap(),
             Processed::Completed
@@ -220,7 +232,7 @@ async fn a_policy_refusal_is_final_and_a_transient_failure_is_retried_then_faile
     let mut worker = database.connect(WORKER_LOGIN).await;
     let fetcher = Scripted::new(vec![Err(FetchError::DestinationForbidden)]);
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Completed
@@ -237,20 +249,20 @@ async fn a_policy_refusal_is_final_and_a_transient_failure_is_retried_then_faile
     enqueue(&database, "job-2", "https://feeds.example.org/b.xml").await;
     let fetcher = Scripted::new(vec![Err(FetchError::TotalTimeout); 3]);
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Retried
     );
     assert_eq!(job_row(&database, "job-2").await.0, "queued");
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Retried
     );
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Completed
@@ -264,7 +276,7 @@ async fn a_policy_refusal_is_final_and_a_transient_failure_is_retried_then_faile
         "max_claims attempts, no more"
     );
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Idle
@@ -285,7 +297,7 @@ async fn an_invalid_command_is_refused_without_fetching() {
     let mut worker = database.connect(WORKER_LOGIN).await;
     let fetcher = Scripted::new(vec![]);
     assert_eq!(
-        process_one(&mut worker, &fetcher, &settings())
+        process_one(&mut worker, &fetcher, &InProcess, &settings())
             .await
             .unwrap(),
         Processed::Completed
@@ -310,7 +322,7 @@ async fn the_production_fetcher_refuses_a_private_destination_without_network() 
     let fetcher = SafeFetcher::new(FetcherConfig::default()).unwrap();
     for _ in 0..2 {
         assert_eq!(
-            process_one(&mut worker, &fetcher, &settings())
+            process_one(&mut worker, &fetcher, &InProcess, &settings())
                 .await
                 .unwrap(),
             Processed::Completed
