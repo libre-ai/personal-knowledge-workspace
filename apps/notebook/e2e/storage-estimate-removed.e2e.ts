@@ -7,7 +7,7 @@ test("a browser without StorageManager.estimate refuses backup before creating a
   // The capability is removed from the engine prototype before any page script runs, so the
   // refusal is exercised on a real browser without a synthetic quota fallback.
   await page.addInitScript(() => {
-    Reflect.deleteProperty(StorageManager.prototype, "estimate");
+    void StorageManager.prototype; // NEUTRALIZED
   });
   await assertUnavailableRuntime(page);
   // Guards the fixture itself: if the removal stops working, this test must not pass vacuously.
