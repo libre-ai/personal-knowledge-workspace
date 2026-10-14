@@ -215,6 +215,20 @@ The build has **no TLS transport to PostgreSQL**: the server connects over a
 Unix socket only. Put a TLS proxy in front of the listen port for any remote
 exposure.
 
+### Worker
+
+The worker (`p02-worker run`, connecting as `p02_worker_login`) also needs
+these variables. It refuses to start without the parser binary.
+
+| Variable | Meaning |
+| --- | --- |
+| `P02_DATABASE_URL` | libpq connection string, Unix socket host only. |
+| `P02_PARSE_WORKER` | **Absolute** path to the `p02-parse-worker` binary, an existing file. Feeds are parsed only in that child process. |
+
+Parsing runs only on Linux: the child process applies kernel limits that other
+platforms cannot enforce, so the parser refuses to run there. Run the worker
+on Linux, in a container or a VM.
+
 ## Tests
 
 ```sh

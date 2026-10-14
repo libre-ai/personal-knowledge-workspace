@@ -25,10 +25,29 @@ export const MIN_INTERVAL_SECONDS = 300;
 export const MAX_INTERVAL_SECONDS = 86400;
 const SOURCE_URL_MAX = 2048;
 
+/**
+ * Per-organization ceilings. Enforced in the insert statement; under heavy
+ * concurrency a tenant can overshoot by the number of requests in flight, so
+ * they bound abuse rather than meter exactly.
+ */
+export interface Limits {
+  /** Scheduled sources a tenant may hold. */
+  sources: number;
+  /** Jobs a tenant may have queued or running at once. */
+  openJobs: number;
+}
+
+export const DEFAULT_LIMITS: Limits = { sources: 100, openJobs: 1000 };
+
 export interface AppDependencies {
   /** A pool connected as a login member of `p02_api`. */
   sql: SQL;
   now?: () => Date;
+  limits?: Partial<Limits>;
+}
+
+function limits(deps: AppDependencies): Limits {
+  return { ...DEFAULT_LIMITS, ...deps.limits };
 }
 
 type Body = { ok: true; value: unknown } | { ok: false; response: Response };
@@ -103,10 +122,15 @@ async function enqueue(deps: AppDependencies, request: Request, tenant: string):
   if (!validateJobDocument(command).ok) {
     return problem(422, "p02.command_invalid", "The command is outside the p02-job-v1 contract.");
   }
+  const openJobs = limits(deps).openJobs;
   return withTenant(deps.sql, tenant, async (tx) => {
+    // The insert happens only while the tenant has room for another open job.
+    // A replay inserts nothing and is answered from the row it finds.
     const inserted = await tx`
       INSERT INTO p02.jobs (tenant_id, job_id, idempotency_key, operation, command)
-      VALUES (${tenant}, ${command.jobId}, ${key}, 'fetch-source', ${command}::jsonb)
+      SELECT ${tenant}, ${command.jobId}, ${key}, 'fetch-source', ${command}::jsonb
+      WHERE (SELECT count(*) FROM p02.jobs
+             WHERE tenant_id = ${tenant} AND state IN ('queued', 'running')) < ${openJobs}
       ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
       RETURNING job_id, state`;
     if (inserted.length === 1) {
@@ -116,6 +140,9 @@ async function enqueue(deps: AppDependencies, request: Request, tenant: string):
       SELECT job_id, state, command->'operation' AS operation FROM p02.jobs
       WHERE idempotency_key = ${key}`;
     const row = existing[0];
+    if (!row) {
+      return problem(429, "p02.quota_exceeded", "The open-job limit of this organization is reached.");
+    }
     if (!row || !isDeepStrictEqual(row.operation, operation)) {
       return problem(
         409,
@@ -272,10 +299,13 @@ async function createSource(deps: AppDependencies, request: Request, tenant: str
     return problem(422, "p02.source_invalid", SOURCE_REFUSAL);
   }
   const scheduleId = `src-${randomBytes(12).toString("hex")}`;
+  const maxSources = limits(deps).sources;
   return withTenant(deps.sql, tenant, async (tx) => {
+    // Inserted only while the tenant has room for another source.
     const inserted = await tx`
       INSERT INTO p02.schedules (tenant_id, schedule_id, url, interval_seconds, next_run_at, idempotency_key)
-      VALUES (${tenant}, ${scheduleId}, ${source.url}, ${source.intervalSeconds}, now(), ${key})
+      SELECT ${tenant}, ${scheduleId}, ${source.url}, ${source.intervalSeconds}, now(), ${key}
+      WHERE (SELECT count(*) FROM p02.schedules WHERE tenant_id = ${tenant}) < ${maxSources}
       ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
       RETURNING schedule_id, url, interval_seconds, next_run_at, last_job_id`;
     if (inserted.length === 1) return envelope(201, sourceView(inserted[0]));
@@ -284,6 +314,9 @@ async function createSource(deps: AppDependencies, request: Request, tenant: str
       SELECT schedule_id, url, interval_seconds, next_run_at, last_job_id FROM p02.schedules
       WHERE tenant_id = ${tenant} AND idempotency_key = ${key}`;
     const row = existing[0];
+    if (!row) {
+      return problem(429, "p02.quota_exceeded", "The source limit of this organization is reached.");
+    }
     if (!row || row.url !== source.url || row.interval_seconds !== source.intervalSeconds) {
       return problem(
         409,
