@@ -243,3 +243,81 @@ async fn a_scheduled_fetch_ends_with_its_items_stored() {
     transaction.commit().await.unwrap();
     assert_eq!(items, 1);
 }
+
+/// Runs `sql` as the worker role inside `tenant`, returning the statement's result.
+async fn as_worker(
+    database: &TestDatabase,
+    tenant: &str,
+    sql: &str,
+) -> Result<u64, tokio_postgres::Error> {
+    let mut worker = database.connect(WORKER_LOGIN).await;
+    let transaction = worker.transaction().await.unwrap();
+    transaction
+        .batch_execute("SET LOCAL ROLE p02_worker")
+        .await
+        .unwrap();
+    transaction
+        .execute("SELECT set_config('app.tenant_id', $1, true)", &[&tenant])
+        .await
+        .unwrap();
+    let result = transaction.execute(sql, &[]).await;
+    transaction.commit().await.ok();
+    result
+}
+
+// The worker may read every tenant's schedule to find the due ones, but it may
+// only change them inside the tenant context, and only the two columns it needs.
+#[tokio::test]
+async fn the_worker_reads_all_schedules_but_writes_only_its_own_tenant() {
+    let database = TestDatabase::start().await;
+    schedule(&database, "feed-policy", "-1 second", 300).await;
+    let other = "ten_dddddddddddddddd";
+
+    // Visible to the worker across tenants (the due-scan needs this).
+    let mut worker = database.connect(WORKER_LOGIN).await;
+    let transaction = worker.transaction().await.unwrap();
+    transaction
+        .batch_execute("SET LOCAL ROLE p02_worker")
+        .await
+        .unwrap();
+    let visible: i64 = transaction
+        .query_one("SELECT count(*) FROM p02.schedules", &[])
+        .await
+        .unwrap()
+        .get(0);
+    transaction.commit().await.unwrap();
+    assert_eq!(visible, 1);
+
+    // A tenant other than the owner cannot change it: no row matches the UPDATE.
+    let changed = as_worker(
+        &database,
+        other,
+        "UPDATE p02.schedules SET next_run_at = now() WHERE schedule_id = 'feed-policy'",
+    )
+    .await
+    .unwrap();
+    assert_eq!(changed, 0, "another tenant's schedule must not be updated");
+
+    // The worker has no insert, no delete, and no grant on the URL column.
+    let inserted = as_worker(
+        &database,
+        TENANT,
+        &format!(
+            "INSERT INTO p02.schedules (tenant_id, schedule_id, url, interval_seconds, next_run_at, idempotency_key) \
+             VALUES ('{TENANT}', 'feed-forged', 'https://x.example.org/', 300, now(), 'forged')"
+        ),
+    )
+    .await;
+    assert!(inserted.is_err(), "the worker must not create schedules");
+
+    let deleted = as_worker(&database, TENANT, "DELETE FROM p02.schedules").await;
+    assert!(deleted.is_err(), "the worker must not delete schedules");
+
+    let url = as_worker(
+        &database,
+        TENANT,
+        "UPDATE p02.schedules SET url = 'https://x.example.org/' WHERE schedule_id = 'feed-policy'",
+    )
+    .await;
+    assert!(url.is_err(), "the worker must not rewrite a schedule's URL");
+}
