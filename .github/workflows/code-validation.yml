@@ -35,6 +35,8 @@ jobs:
         uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8
         with:
           tool: cargo-llvm-cov
+      - name: Refuse builds that enable the loopback allowance
+        run: sh scripts/check-p02-loopback.sh
       - name: Measure and gate P02 line coverage
         run: |
           cargo llvm-cov -p p02-domain -p p02-fetch -p p02-parse -p p02-store -p p02-worker \
