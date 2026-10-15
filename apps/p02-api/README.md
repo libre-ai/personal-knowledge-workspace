@@ -189,7 +189,7 @@ a token or a key cannot leak into a log through an error.
 
 ```sh
 P02_API_URL=https://p02.example.org P02_SESSION_TOKEN=<token> \
-  bun run apps/p02-api/examples/enqueue-and-read.ts
+  bun apps/p02-api/examples/enqueue-and-read.ts
 ```
 
 It exits 1 on any refusal and prints the stable error code. The token is read
