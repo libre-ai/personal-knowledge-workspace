@@ -13,6 +13,7 @@
     "start": "bun src/main.ts",
     "pretest": "bun run check:bun",
     "test": "bun test",
+    "pretest:e2e": "bun run check:bun",
     "test:e2e": "bun test ./test/e2e/p02-e2e.e2e.ts",
     "pretypecheck": "bun run check:bun",
     "typecheck": "tsc --noEmit -p tsconfig.json"
