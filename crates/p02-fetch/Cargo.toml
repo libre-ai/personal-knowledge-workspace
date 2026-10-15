@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# End-to-end suite only: admits loopback IP literals (see policy.rs). Off by
+# default and never enabled by a deployable; `[features]` is not a test switch.
+e2e-loopback = []
+
 [dependencies]
 bytes.workspace = true
 flate2.workspace = true

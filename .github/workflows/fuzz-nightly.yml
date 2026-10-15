@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Libre AI contributors
+# SPDX-License-Identifier: EUPL-1.2
+name: Fuzz nightly
+'on':
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  # Coverage-guided fuzzing of the feed parser (NFR: G6). A crash fails the run
+  # and uploads the reproducer; the budget is fixed so the result is comparable.
+  parse-feed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install nightly Rust for the libFuzzer runtime
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: nightly
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8
+        with:
+          tool: cargo-fuzz@0.13.2
+      - name: Fuzz p02-parse for a fixed budget, seeded with the conformance fixtures
+        working-directory: crates/p02-parse/fuzz
+        run: |
+          cargo +nightly fuzz run parse_feed ../tests/fixtures -- \
+            -max_total_time=900 -max_len=65536
+      - name: Fuzz the p02-job-v1 document decoder for a fixed budget
+        working-directory: crates/p02-domain/fuzz
+        run: |
+          cargo +nightly fuzz run parse_document -- \
+            -max_total_time=300 -max_len=65536

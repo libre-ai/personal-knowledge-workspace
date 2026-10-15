@@ -85,7 +85,7 @@ pub async fn claim(
 
 /// Open a transaction as `p02_worker` inside `tenant`'s row-level security
 /// context. Both settings are transaction-local and end with it.
-async fn tenant_transaction<'a>(
+pub(crate) async fn tenant_transaction<'a>(
     client: &'a mut Client,
     tenant: &TenantId,
 ) -> Result<tokio_postgres::Transaction<'a>, StoreError> {
@@ -141,6 +141,19 @@ pub async fn complete(
     result: &Value,
 ) -> Result<(), StoreError> {
     let transaction = tenant_transaction(client, &claim.tenant).await?;
+    complete_in(&transaction, claim, state, result).await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+/// Release the lease and record the terminal state inside an open tenant
+/// transaction, so a caller can write more rows atomically with them.
+pub(crate) async fn complete_in(
+    transaction: &tokio_postgres::Transaction<'_>,
+    claim: &Claim,
+    state: Terminal,
+    result: &Value,
+) -> Result<(), StoreError> {
     let released = transaction
         .execute(
             &format!("DELETE FROM p02.job_dispatch WHERE {LEASE_HELD}"),
@@ -161,7 +174,6 @@ pub async fn complete(
     if updated != 1 {
         return Err(StoreError::JobMissing);
     }
-    transaction.commit().await?;
     Ok(())
 }
 

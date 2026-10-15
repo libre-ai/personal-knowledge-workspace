@@ -1,9 +1,10 @@
 //! The worker binary: migrate subcommand and connection-string vetting.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::Duration;
 
-use p02_store::testing::{MIGRATOR, TestDatabase};
+use p02_store::testing::{MIGRATOR, TestDatabase, WORKER_LOGIN};
 
 const BINARY: &str = env!("CARGO_BIN_EXE_p02-worker");
 
@@ -26,7 +27,7 @@ async fn migrate_verifies_an_already_migrated_database() {
     );
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "p02-worker: migrations verified=2 applied=0\n"
+        "p02-worker: migrations verified=4 applied=0\n"
     );
 }
 
@@ -54,4 +55,49 @@ fn a_missing_connection_string_is_refused() {
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
+}
+
+// `run` must reach its idle loop on an empty queue and exit 0 on SIGINT,
+// without a store error: a store error would mean the loop never worked.
+#[tokio::test]
+async fn run_idles_on_an_empty_queue_and_exits_cleanly_on_interrupt() {
+    let database = TestDatabase::start().await;
+    let url = format!(
+        "host={} dbname=p02 user={WORKER_LOGIN}",
+        database.socket_dir().display()
+    );
+    // The idle loop never parses, so any existing file satisfies the parser
+    // path check; production points it at `p02-parse-worker`.
+    let child = Command::new(BINARY)
+        .arg("run")
+        .env("P02_DATABASE_URL", &url)
+        .env("P02_PARSE_WORKER", BINARY)
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(1500));
+    let interrupted = Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(interrupted.success());
+    let output = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    assert!(!stderr.contains("store error"), "{stderr}");
+}
+
+// `run` refuses to start without an absolute path to the parser binary: a
+// worker that cannot parse must not claim jobs it would then fail.
+#[test]
+fn run_refuses_to_start_without_a_parser_binary() {
+    let database_url = "host=/nonexistent dbname=p02 user=p02_worker_login";
+    let output = Command::new(BINARY)
+        .arg("run")
+        .env("P02_DATABASE_URL", database_url)
+        .env("P02_PARSE_WORKER", "relative/p02-parse-worker")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("P02_PARSE_WORKER"));
 }

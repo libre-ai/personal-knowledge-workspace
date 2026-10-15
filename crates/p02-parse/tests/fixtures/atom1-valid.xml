@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Synthetic Atom feed</title>
+  <id>urn:example:feed</id>
+  <updated>2026-10-13T08:00:00Z</updated>
+  <entry>
+    <title type="html">&lt;em&gt;Emphasis&lt;/em&gt; title</title>
+    <id>urn:example:entry:1</id>
+    <link href="https://feeds.example.org/entries/1"/>
+    <published>2026-10-12T09:30:00+02:00</published>
+    <updated>2026-10-13T08:00:00Z</updated>
+    <summary type="html">&lt;p&gt;Atom summary&lt;/p&gt;&lt;img src="x" onerror="steal()"&gt;</summary>
+  </entry>
+</feed>

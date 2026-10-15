@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Synthetic watch feed</title>
+    <link>https://feeds.example.org/</link>
+    <description>Synthetic fixture</description>
+    <item>
+      <title>Undated item</title>
+      <link>https://feeds.example.org/posts/undated</link>
+      <guid>urn:example:post:undated</guid>
+      <pubDate>not a date at all</pubDate>
+      <description>Kept with no date</description>
+    </item>
+  </channel>
+</rss>
