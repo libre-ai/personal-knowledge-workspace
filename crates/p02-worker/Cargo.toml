@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# End-to-end suite only: forwards p02-fetch's loopback allowance to the worker
+# binary built for the E2E run. Never enabled by a deployable.
+e2e-loopback = ["p02-fetch/e2e-loopback"]
+
 [dependencies]
 blake3.workspace = true
 p02-domain = { path = "../p02-domain", version = "=0.1.0" }

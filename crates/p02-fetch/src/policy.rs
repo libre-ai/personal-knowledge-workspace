@@ -18,6 +18,17 @@ use crate::error::FetchError;
 /// is a smuggling vector, not a subscription.
 pub const MAX_URL_BYTES: usize = 2048;
 
+/// The end-to-end allowance: loopback only (`127.0.0.0/8` and `::1`, as
+/// `IpAddr::is_loopback` defines it). The IPv4-mapped spelling
+/// `::ffff:127.0.0.1` is not loopback to that predicate, so it stays refused.
+///
+/// Compiled only with the `e2e-loopback` feature, which no deployable enables:
+/// the E2E suite serves its fixture feeds on 127.0.0.1, which production refuses.
+#[cfg(feature = "e2e-loopback")]
+fn e2e_loopback(ip: IpAddr) -> bool {
+    ip.is_loopback()
+}
+
 /// Scheme of a validated target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scheme {
@@ -110,16 +121,26 @@ impl DestinationPolicy {
         {
             return true;
         }
+        #[cfg(feature = "e2e-loopback")]
+        if e2e_loopback(ip) {
+            return true;
+        }
         is_public(ip)
     }
 
-    fn allows_port(&self, scheme: Scheme, port: u16) -> bool {
+    fn allows_port(&self, scheme: Scheme, port: u16, ip: Option<IpAddr>) -> bool {
         #[cfg(test)]
         if let Some(allowance) = &self.test_allowance
             && allowance.ports.contains(&port)
         {
             return true;
         }
+        #[cfg(feature = "e2e-loopback")]
+        if ip.is_some_and(e2e_loopback) {
+            return true;
+        }
+        #[cfg(not(feature = "e2e-loopback"))]
+        let _ = ip;
         matches!((scheme, port), (Scheme::Http, 80) | (Scheme::Https, 443))
     }
 
@@ -163,7 +184,11 @@ impl DestinationPolicy {
             return Err(FetchError::DestinationForbidden);
         }
         let port = url.port_or_known_default().ok_or(FetchError::UrlInvalid)?;
-        if !self.allows_port(scheme, port) {
+        let ip_literal = match &host {
+            TargetHost::Ip(ip) => Some(*ip),
+            TargetHost::Domain(_) => None,
+        };
+        if !self.allows_port(scheme, port, ip_literal) {
             return Err(FetchError::PortForbidden);
         }
         // The fragment never leaves the client.
@@ -355,6 +380,59 @@ mod tests {
         );
         assert_eq!(
             policy.check_resolved(&["::1".parse().unwrap()]),
+            Err(FetchError::DestinationForbidden)
+        );
+    }
+
+    /// Production build: loopback is refused on every port, so a build without
+    /// the `e2e-loopback` feature cannot reach a fixture server on 127.0.0.1.
+    #[cfg(not(feature = "e2e-loopback"))]
+    #[test]
+    fn without_the_e2e_feature_loopback_is_refused_on_every_port() {
+        for url in [
+            "http://127.0.0.1/feed",
+            "http://127.0.0.1:8080/feed",
+            "http://127.0.0.1:80/feed",
+            "http://[::1]:8080/feed",
+            "http://[::ffff:127.0.0.1]:8080/feed",
+        ] {
+            assert_eq!(
+                policy().check_url(url),
+                Err(FetchError::DestinationForbidden),
+                "{url}"
+            );
+        }
+        let loopback: IpAddr = "127.0.0.1".parse().unwrap();
+        assert_eq!(
+            policy().check_resolved(&[loopback]),
+            Err(FetchError::DestinationForbidden)
+        );
+    }
+
+    /// E2E build only: loopback literals are admitted on any port, nothing
+    /// private is, and an IPv4-mapped loopback stays refused.
+    #[cfg(feature = "e2e-loopback")]
+    #[test]
+    fn e2e_loopback_admits_loopback_literals_on_any_port_and_nothing_private() {
+        assert!(policy().check_url("http://127.0.0.1:54321/feed").is_ok());
+        assert!(policy().check_url("http://127.0.0.2:8080/").is_ok());
+        assert!(policy().check_url("http://[::1]:8080/").is_ok());
+        for url in [
+            "http://10.0.0.1:8080/",
+            "http://169.254.169.254:8080/",
+            "http://[::ffff:127.0.0.1]:8080/",
+        ] {
+            assert_eq!(
+                policy().check_url(url),
+                Err(FetchError::DestinationForbidden),
+                "{url}"
+            );
+        }
+        let loopback: IpAddr = "127.0.0.1".parse().unwrap();
+        let private: IpAddr = "10.0.0.1".parse().unwrap();
+        assert_eq!(policy().check_resolved(&[loopback]), Ok(()));
+        assert_eq!(
+            policy().check_resolved(&[loopback, private]),
             Err(FetchError::DestinationForbidden)
         );
     }
