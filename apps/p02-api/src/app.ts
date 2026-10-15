@@ -138,10 +138,14 @@ async function enqueue(deps: AppDependencies, request: Request, tenant: string):
     }
     const existing = await tx`
       SELECT job_id, state, command->'operation' AS operation FROM p02.jobs
-      WHERE idempotency_key = ${key}`;
+      WHERE tenant_id = ${tenant} AND idempotency_key = ${key}`;
     const row = existing[0];
     if (!row) {
-      return problem(429, "p02.quota_exceeded", "The open-job limit of this organization is reached.");
+      return problem(
+        429,
+        "p02.quota_exceeded",
+        "The open-job limit of this organization is reached.",
+      );
     }
     if (!row || !isDeepStrictEqual(row.operation, operation)) {
       return problem(
@@ -284,7 +288,11 @@ const SOURCE_REFUSAL =
   "A source needs an http(s) url the contract accepts, of at most 2048 characters, " +
   "and an intervalSeconds from 300 to 86400.";
 
-async function createSource(deps: AppDependencies, request: Request, tenant: string): Promise<Response> {
+async function createSource(
+  deps: AppDependencies,
+  request: Request,
+  tenant: string,
+): Promise<Response> {
   const key = request.headers.get("idempotency-key");
   if (key === null) {
     return problem(400, "p02.idempotency_key_required", "An Idempotency-Key header is required.");
@@ -315,7 +323,11 @@ async function createSource(deps: AppDependencies, request: Request, tenant: str
       WHERE tenant_id = ${tenant} AND idempotency_key = ${key}`;
     const row = existing[0];
     if (!row) {
-      return problem(429, "p02.quota_exceeded", "The source limit of this organization is reached.");
+      return problem(
+        429,
+        "p02.quota_exceeded",
+        "The source limit of this organization is reached.",
+      );
     }
     if (!row || row.url !== source.url || row.interval_seconds !== source.intervalSeconds) {
       return problem(
@@ -328,7 +340,11 @@ async function createSource(deps: AppDependencies, request: Request, tenant: str
   });
 }
 
-async function readSource(deps: AppDependencies, tenant: string, scheduleId: string): Promise<Response> {
+async function readSource(
+  deps: AppDependencies,
+  tenant: string,
+  scheduleId: string,
+): Promise<Response> {
   return withTenant(deps.sql, tenant, async (tx) => {
     const rows = await tx`
       SELECT schedule_id, url, interval_seconds, next_run_at, last_job_id FROM p02.schedules

@@ -34,7 +34,8 @@ function create(body: unknown, token: string | null, key: string | null): Reques
 }
 
 function read(path: string, token: string | null): Request {
-  const headers: Record<string, string> = token === null ? {} : { authorization: `Bearer ${token}` };
+  const headers: Record<string, string> =
+    token === null ? {} : { authorization: `Bearer ${token}` };
   return new Request(`http://api.test${path}`, { headers });
 }
 
@@ -57,7 +58,13 @@ describe("sources: scheduled feed fetches", () => {
     );
     expect(response.status).toBe(201);
     const { data } = (await response.json()) as {
-      data: { scheduleId: string; url: string; intervalSeconds: number; nextRunAt: string; lastJobId: null };
+      data: {
+        scheduleId: string;
+        url: string;
+        intervalSeconds: number;
+        nextRunAt: string;
+        lastJobId: null;
+      };
     };
     expect(data.scheduleId).toMatch(/^src-[0-9a-f]{24}$/);
     expect(data.url).toBe(FEED);
@@ -67,15 +74,23 @@ describe("sources: scheduled feed fetches", () => {
   });
 
   test("a replay with the same key returns the same source; another body conflicts", async () => {
-    const first = await app.handle(create({ url: FEED, intervalSeconds: 600 }, tokenA, "src-replay-1"));
+    const first = await app.handle(
+      create({ url: FEED, intervalSeconds: 600 }, tokenA, "src-replay-1"),
+    );
     const created = (await first.json()) as { data: { scheduleId: string } };
-    const replay = await app.handle(create({ url: FEED, intervalSeconds: 600 }, tokenA, "src-replay-1"));
+    const replay = await app.handle(
+      create({ url: FEED, intervalSeconds: 600 }, tokenA, "src-replay-1"),
+    );
     expect(replay.status).toBe(200);
     expect(((await replay.json()) as { data: { scheduleId: string } }).data.scheduleId).toBe(
       created.data.scheduleId,
     );
     const other = await app.handle(
-      create({ url: "https://feeds.example.org/other.xml", intervalSeconds: 600 }, tokenA, "src-replay-1"),
+      create(
+        { url: "https://feeds.example.org/other.xml", intervalSeconds: 600 },
+        tokenA,
+        "src-replay-1",
+      ),
     );
     expect(other.status).toBe(409);
   });
@@ -86,7 +101,10 @@ describe("sources: scheduled feed fetches", () => {
       ["interval above one day", { url: FEED, intervalSeconds: 86401 }],
       ["interval not an integer", { url: FEED, intervalSeconds: 600.5 }],
       ["non-http scheme", { url: "ftp://feeds.example.org/a.xml", intervalSeconds: 600 }],
-      ["credentials in the URL", { url: "https://user:secret@feeds.example.org/a.xml", intervalSeconds: 600 }],
+      [
+        "credentials in the URL",
+        { url: "https://user:secret@feeds.example.org/a.xml", intervalSeconds: 600 },
+      ],
       ["unknown field", { url: FEED, intervalSeconds: 600, extra: true }],
       ["missing field", { url: FEED }],
       ["array body", [FEED]],
@@ -104,12 +122,16 @@ describe("sources: scheduled feed fetches", () => {
     expect(malformed.status).toBe(400);
     const noKey = await app.handle(create({ url: FEED, intervalSeconds: 600 }, tokenA, null));
     expect(noKey.status).toBe(400);
-    const badKey = await app.handle(create({ url: FEED, intervalSeconds: 600 }, tokenA, "bad key!"));
+    const badKey = await app.handle(
+      create({ url: FEED, intervalSeconds: 600 }, tokenA, "bad key!"),
+    );
     expect(badKey.status).toBe(400);
   });
 
   test("a source is readable by its tenant only; an unknown one is a 404", async () => {
-    const created = await app.handle(create({ url: FEED, intervalSeconds: 900 }, tokenA, "src-read-1"));
+    const created = await app.handle(
+      create({ url: FEED, intervalSeconds: 900 }, tokenA, "src-read-1"),
+    );
     const { data } = (await created.json()) as { data: { scheduleId: string } };
     const mine = await app.handle(read(`/v1/sources/${data.scheduleId}`, tokenA));
     expect(mine.status).toBe(200);
@@ -120,7 +142,9 @@ describe("sources: scheduled feed fetches", () => {
   });
 
   test("the routes require a live session and the right methods", async () => {
-    const anonymous = await app.handle(create({ url: FEED, intervalSeconds: 600 }, null, "src-anon-1"));
+    const anonymous = await app.handle(
+      create({ url: FEED, intervalSeconds: 600 }, null, "src-anon-1"),
+    );
     expect(anonymous.status).toBe(401);
     const getCreate = await app.handle(
       new Request("http://api.test/v1/sources", { headers: { authorization: `Bearer ${tokenA}` } }),

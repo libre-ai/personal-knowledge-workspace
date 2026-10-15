@@ -49,7 +49,11 @@ describe("per-organization limits", () => {
     expect(first.status).toBe(201);
 
     const refused = await limited.handle(
-      post("/v1/sources", { url: "https://feeds.example.org/b.xml", intervalSeconds: 600 }, "quota-src-2"),
+      post(
+        "/v1/sources",
+        { url: "https://feeds.example.org/b.xml", intervalSeconds: 600 },
+        "quota-src-2",
+      ),
     );
     expect(refused.status).toBe(429);
     expect(((await refused.json()) as { error: { code: string } }).error.code).toBe(
