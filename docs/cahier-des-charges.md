@@ -65,7 +65,7 @@ versionnées (I-13, I-15).
   qui vivent dans `schemas-and-contracts` ; c'est la spécification du code récupéré, antérieure à
   ADR-0042. `docs/product-readiness.md` est retiré au profit de la fiche.
 - **Fiche sans phase P04** — la fiche n'a ni phase de qualification de P04, ni plafond de mémoire
-  figé, ni critère de sortie « série de mesures verte » (`ADR-0057:52`, `ADR-0057:70`). Voir le
+  figé, ni critère de sortie « série de mesures verte » (`ADR-0057:52`, `ADR-0057:72`). Voir le
   critère CA-46.
 
 ### 1.3 Doctrine applicable
@@ -85,7 +85,7 @@ Décisions de surface qui s'appliquent à P04, toutes signées :
 | --- | --- | --- |
 | 0042 § 3 | le Markdown sur disque fait foi, le stockage chiffré en est la réplique ; B' exige une première utilisation réelle de la boucle documentaire par le propriétaire | `ADR-0042:94-95`, `ADR-0042:78-80` |
 | 0042 § 8 amendé par 0057 § 1 | premier palier : application macOS, coquille Tauri 2 ; extension navigateur parlant au même cœur par native messaging et stdio ; aucun port ouvert ; distribution à un tiers = signature et notarisation | `ADR-0042:200-234` ; `ADR-0057:34-40` ; D96 |
-| 0044 D3, maintenu | aucun caractère modifié que la personne n'a pas tapé | `ADR-0044:19` ; `ADR-0057:44` |
+| 0044 D3, maintenu | aucun caractère modifié que la personne n'a pas tapé | `ADR-0044:19` ; `ADR-0057:46` |
 | 0057 § 2 | éditeur CodeMirror 6 servi depuis la mémoire sans réseau ; cœur Rust (octets, Markdown de l'aperçu, index) appelé par le pont Tauri, rien réimplémenté côté front ; six contrôles de coquille prouvés par vecteur rouge | `ADR-0057:42-48` ; D97 |
 | 0057 § 3 | seuils d'ADR-0044 re-mesurés sous Tauri, protocole commité d'abord ; série = critère de sortie de la qualification, pas précondition au code ; un rouge = décision de surface | `ADR-0057:50-66` ; D97 |
 | 0057 § 4 | plafond de mémoire figé avant mesure ; qualification macOS (runner, `lsof -i -P`, `codesign --verify --strict`, `spctl --assess`, notarisation, Playwright webkit) ; mobiles, Windows, Linux au second palier | `ADR-0057:68-74` ; D98 |
@@ -142,7 +142,7 @@ mais aucun critère de ce cahier ne les cite.
 - Collaboration temps réel sur le carnet, publication web publique, analytics de lecture,
   télémétrie (PRD 11 F30, F32, F49, F51 ; `docs/apps/notebook.md:21-25`).
 - Code exécutable dans le contenu des notes (PRD 11 F24 X) ; CSS ou JavaScript personnalisés ;
-  front chargé depuis un hôte distant (`ADR-0057:46`).
+  front chargé depuis un hôte distant (`ADR-0057:48`).
 - Traitement par un modèle de langage en v1 (P33 non qualifié ; PRD 11 F41 à F44) : aucune
   exigence AI Act n'est retenue en v1 (hypothèse, champ d'application AI Act art. 2 non relu
   `[NON VÉRIFIÉ]`).
@@ -208,7 +208,7 @@ P04, cible (ADR-0057) :
 - EF-P04-5 L'éditeur MUST NOT modifier un caractère non tapé par la personne : substitutions
   automatiques (guillemets, tirets, remplacements), correction, détection de liens et de données,
   insertion intelligente d'espaces désactivées ; l'aperçu ne change que des attributs
-  (`ADR-0044:19`, D3 maintenu par `ADR-0057:44`). Une contribution qui en retire une rouvre AT-01.
+  (`ADR-0044:19`, D3 maintenu par `ADR-0057:46`). Une contribution qui en retire une rouvre AT-01.
 - EF-P04-6 Une édition concurrente (éditeur externe, hôte de capture, autre appareil en v1.1) MUST
   être fusionnée à trois voies ; un conflit non fusionnable MUST conserver les deux versions
   (décision Y3 ; PRD 11 F29).
@@ -216,7 +216,7 @@ P04, cible (ADR-0057) :
   navigateur, stdio, manifeste restreint à l'identifiant de l'extension) et MUST NOT ouvrir de port
   local (`ADR-0042:211-216`, partie du § 8 inchangée par `ADR-0057:38`).
 - EF-P04-8 L'application macOS MUST être une coquille Tauri 2 dont le front est rendu dans la
-  WKWebView du système, sous six contrôles (`ADR-0057:46-48`) : (1) le front est servi depuis la
+  WKWebView du système, sous six contrôles (`ADR-0057:48`) : (1) le front est servi depuis la
   mémoire de l'application par un gestionnaire de schéma privé, jamais depuis un hôte distant ;
   (2) la configuration Tauri n'autorise aucune URL distante ; (3) la politique de sécurité de
   contenu est `default-src 'none'` élargie aux seules origines du schéma privé ; (4) le magasin de
@@ -228,7 +228,7 @@ P04, cible (ADR-0057) :
   fidèles à l'octet (écriture atomique : fichier temporaire, `fsync`, renommage), l'analyse
   Markdown de l'aperçu et l'index plein texte ; le front MUST l'appeler par le pont de la coquille
   Tauri (commandes et événements entre le front et le processus Rust), non par UniFFI, et MUST
-  NOT réimplémenter aucune de ces fonctions (`ADR-0057:44`).
+  NOT réimplémenter aucune de ces fonctions (`ADR-0057:46`).
 - EF-P04-10 L'éditeur MUST être CodeMirror 6, servi depuis la mémoire de l'application sans
   réseau (`ADR-0057:42-44`) ; ses paquets et ceux du front MUST être épinglés en version exacte,
   publiés depuis au moins trois jours (`bunfig.toml`, `minimumReleaseAge` 259200), sous une
@@ -254,7 +254,7 @@ Chapitres sans code (exigences de cadrage, pas de critère) :
   `notebook-vault`, cœur Tantivy MIT) est déclarée dans la fiche avant tout code d'index
   transversal hors P04.
 - EF-P07-1 Toute réutilisation de l'archive `ai-practice-workbench` passe par un import avec
-  provenance (`ADR-0042:189-194`, acte 3).
+  provenance (`ADR-0042:183-191`, acte 3).
 
 ### 5.2 Exigences non fonctionnelles
 
@@ -289,7 +289,7 @@ Chapitres sans code (exigences de cadrage, pas de critère) :
   texte exposé à l'accessibilité 100 % ; indexation à froid de CR-10k ≤ 20 s et recherche p95
   ≤ 150 ms (PRD 11 NFR-01 et NFR-05, non repris par ADR-0057, mesurés dans la même série sans être
   critères de sortie). Mesures datées hors Tauri : `prd.md` § 5.
-- ENF-7 **Plafond de mémoire figé avant mesure** (`ADR-0057:70`) : le plafond de P04 est la valeur
+- ENF-7 **Plafond de mémoire figé avant mesure** (`ADR-0057:72`) : le plafond de P04 est la valeur
   propre de NFR-10, 500 Mio, écrit dans la fiche avant toute mesure sous Tauri ; un dépassement
   mesuré est une décision de surface (retour au natif pour P04), jamais une révision du plafond.
 - ENF-8 **Performance sauvegarde** : profil producteur p95 ≤ 5 s et RSS additionnel ≤ 256 Mio,
@@ -629,7 +629,7 @@ Internes (libre-ai) :
   messaging.
 - `information-watch` : P02, producteur de l'extrait `knowledge-excerpt.v1` ; consommateur
   éventuel du code P02 de ce dépôt par import avec provenance ; le spike `@wdio/tauri-service` est
-  fait une fois pour P02 et son verdict vaut pour la flotte (`ADR-0057:72`).
+  fait une fois pour P02 et son verdict vaut pour la flotte (`ADR-0057:73`).
 - `application-development-toolkit` : `@libre-ai/ui` (1 import), `@libre-ai/web-platform`
   (5 imports : CSP, handler) ; licence Apache-2.0 de ces paquets à confronter à EUPL-1.2 du dépôt.
 - Bloc `overrides` de `package.json:10-23` : 11 clés `@libre-ai/*`, toutes de nature `override` ;
@@ -662,7 +662,7 @@ est dans l'arbre. À adopter par le jalon ADR-0057, sous CA-42 et CA-6 : `tauri`
 Apache-2.0, dernière release `tauri-cli-v2.12.4` du 2026-10-21, `ADR-0057:27`), paquets
 `@codemirror/*` 6 (MIT `[NON VÉRIFIÉ]`, à relever à l'épinglage), `pulldown-cmark` (MIT) et
 `tantivy` (MIT) pour `notebook-vault` (versions mesurées par ADR-0044 : 0.13.4 et 0.26.2,
-`ADR-0044:51`). UniFFI n'est plus candidat (`ADR-0057:44`).
+`ADR-0044:51`). UniFFI n'est plus candidat (`ADR-0057:46`).
 
 ## 11. Risques
 
@@ -680,7 +680,7 @@ Apache-2.0, dernière release `tauri-cli-v2.12.4` du 2026-10-21, `ADR-0057:27`),
 | R10 | Fiche `maturity: idea` sans P-xx, sans phase P04, sans plafond, sans `kill_predicates` | gates de flotte aveugles au chantier réel | CA-1 ; CA-46 ; AB-3 à AB-6 |
 | R11 | `LICENSE` niant le code dans un dépôt public | lecteur externe induit en erreur (I-15) | Q4 de la mission ; CA-2 |
 | R12 | Signature et notarisation (CA-45) exigent un compte Apple Developer, acte du propriétaire (`ADR-0042:226-229`) | WP-6 bloqué sans cet acte ; porte `one-way` | la qualification locale (CA-37 à CA-44) ne l'attend pas ; l'usage réel par le propriétaire n'en dépend pas |
-| R13 | Spike `@wdio/tauri-service` fait pour P02 : son verdict vaut pour la flotte (`ADR-0057:72`) ; s'il est rouge, le parcours e2e de CA-41 doit passer par Playwright webkit contre le front seul | parcours fonctionnel mesuré hors coquille | CA-41 écrit sous Playwright webkit (D93) ; le verdict du spike est lu avant WP-4 |
+| R13 | Spike `@wdio/tauri-service` fait pour P02 : son verdict vaut pour la flotte (`ADR-0057:73`) ; s'il est rouge, le parcours e2e de CA-41 doit passer par Playwright webkit contre le front seul | parcours fonctionnel mesuré hors coquille | CA-41 écrit sous Playwright webkit (D93) ; le verdict du spike est lu avant WP-4 |
 
 ## 12. Table de conformité à SPECIFICATION-STANDARD
 

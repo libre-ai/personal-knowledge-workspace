@@ -75,7 +75,7 @@ propriétaire » (`ADR-0042:78-80`).
 | Frontière cryptographique de sauvegarde sans capacité hôte (WASM sans import, secret de récupération, vecteurs dorés) | oui, sur fixture publique | `crates/notebook-core/` ; cahier § 5.1 EF-P04-1, EF-P04-2 |
 | Markdown comme autorité, index dérivé reconstructible | non : aucun code | cahier EF-P04-4, critère CA-15 |
 | Fidélité à l'octet de l'éditeur : aucun caractère modifié que la personne n'a pas tapé | non : aucun éditeur ; mesurée hors dépôt sur deux prototypes (`ADR-0044:39-40`) | cahier EF-P04-5, critères CA-16 et CA-41 |
-| Coquille sans réseau : front servi depuis la mémoire, aucune URL distante, CSP `default-src 'none'`, magasin non persistant, capacités énumérées, aucun port | non : aucune coquille ; six contrôles à prouver chacun par un vecteur rouge (`ADR-0057:46-48`) | cahier EF-P04-8, critères CA-37 et CA-38 |
+| Coquille sans réseau : front servi depuis la mémoire, aucune URL distante, CSP `default-src 'none'`, magasin non persistant, capacités énumérées, aucun port | non : aucune coquille ; six contrôles à prouver chacun par un vecteur rouge (`ADR-0057:48`) | cahier EF-P04-8, critères CA-37 et CA-38 |
 | Seuils de qualification figés avant mesure, série rejouée dans la coquille construite | non : protocole à commiter avant toute mesure (`ADR-0057:50-66`, § 3) | cahier § 8, critères CA-36, CA-43, CA-44 |
 | Export sans verrou : le dossier Markdown est la donnée, la réplique chiffrée se rouvre par algorithmes publics | partiel : réplique prouvée sur vecteurs dorés, dossier non encore lu par l'application | `crates/notebook-core/src/model.rs` ; cahier § 5.1 |
 
@@ -120,7 +120,7 @@ baseline pour Tauri (`ADR-0057:52-54`).
 | AT-02, latence frappe → rendu, aperçu en direct actif, 5 000 lignes | p95 ≤ 16 ms | non mesuré sous Tauri | (a) 10,27 ms ; (b) non mesuré avec aperçu (6,04 ms avec coloration seule) | idem | série du protocole (critère CA-43) |
 | AT-02, latence frappe → rendu, aperçu en direct actif, 1 Mio | p95 ≤ 50 ms | non mesuré sous Tauri | (a) 9,79 ms ; (b) non mesuré avec aperçu (6,18 ms avec coloration seule) | idem | série du protocole (critère CA-43) |
 | NFR-03, première ouverture d'une note de 1 Mio, aperçu actif | p95 ≤ 100 ms | non mesuré sous Tauri | (a) 113 ms avec aperçu, 76 ms avec coloration ; (b) 99,7 ms | idem ; un rendu de la zone visible d'abord est admis dans le protocole (`ADR-0044:24`) | série du protocole (critère CA-43) |
-| NFR-10, mémoire résidente, application + index + interface | ≤ 500 Mio, plafond figé avant mesure (`ADR-0057:70`, § 4) | non mesuré sous Tauri | (a) pic 312 Mio avec index ; (b) 413 Mio sans index, dont 240 Mio de processus GPU WebKit | dépassement : décision de surface, retour au natif pour P04 par ADR ; jamais une révision du plafond | série du protocole (critère CA-44) |
+| NFR-10, mémoire résidente, application + index + interface | ≤ 500 Mio, plafond figé avant mesure (`ADR-0057:72`, § 4) | non mesuré sous Tauri | (a) pic 312 Mio avec index ; (b) 413 Mio sans index, dont 240 Mio de processus GPU WebKit | dépassement : décision de surface, retour au natif pour P04 par ADR ; jamais une révision du plafond | série du protocole (critère CA-44) |
 | Texte d'une note de 1 Mio exposé à l'accessibilité | 100 % (seuil bloquant, arbitrage distinct du 2026-10-23, `ADR-0057:66`) | non mesuré sous Tauri | (a) 100 % ; (b) 0,54 % | rouge : même décision de surface que la mémoire | série du protocole (critère CA-44) |
 | Empreinte du cœur qualifiée = empreinte du cœur livré | égalité | non applicable à la coquille (cœur WASM de la réplique) | mesure du 2026-10-09 : `7498c60c…046c` consignée comme mesure (`docs/notebook-build-migration.md`) | écart : les campagnes produit refusent la build ; ré-épinglage après rejeu (Y41) | critère CA-14 |
 | Jours avec note créée ou modifiée dans P04 sur 28 jours consécutifs | ≥ 24, outil précédent non lancé | non mesuré : aucun journal d'usage | aucune | franchi : P04 qualifié pour l'usage propre (seconde moitié de B') ; non franchi : AB-6 | journal local et script du propriétaire hors produit (critère CA-31) |
@@ -135,7 +135,7 @@ contrat `knowledge-excerpt.v1` existera, sans seuil fixé par ce document.
 | # | Hypothèse | Expérience qui la valide | Si invalidée |
 | --- | --- | --- | --- |
 | H-1 | Le Markdown sur disque comme autorité suffit à reconstruire index, rétroliens et recherche sans perte | critère CA-15 sur CR-10k après suppression de l'index et du cache | le modèle de stockage de P04 est rouvert (Q2 de la mission) |
-| H-2 | La coquille Tauri 2 tient NFR-10 (≤ 500 Mio, application + index + interface) sur la note de 1 Mio avec index | critère CA-44, série du protocole | décision de surface : retour au natif pour P04, par ADR (`ADR-0057:70`) ; le plafond n'est pas révisé |
+| H-2 | La coquille Tauri 2 tient NFR-10 (≤ 500 Mio, application + index + interface) sur la note de 1 Mio avec index | critère CA-44, série du protocole | décision de surface : retour au natif pour P04, par ADR (`ADR-0057:72`) ; le plafond n'est pas révisé |
 | H-3 | Le front peut exposer 100 % du texte de la note à l'accessibilité en maintenant lui-même l'arbre d'accessibilité, ce que WebKit ne fait pas pour un éditeur CodeMirror (`ADR-0057:66`) | critère CA-44, mesure d'accessibilité de la série | même décision de surface que H-2 |
 | H-4 | Les six contrôles de coquille d'ADR-0057 § 2 suffisent à tenir la surface d'attaque ajoutée par le moteur web (processus auxiliaires mesurés par ADR-0044) | critères CA-37 et CA-38 : chaque vecteur rouge refusé et compté ; `lsof -i -P` sans port | la matrice de menace du cahier § 7 est rouverte par ADR, sans inventer de contrôle hors d'ADR-0057 |
 | H-5 | Un commun libre (SilverBullet, Memos) ne couvre pas la garantie « aucun contenu non fiable n'est instruction » avec fidélité à l'octet et provenance | confrontation de la matrice de parité du PRD 11 § 1 ligne par ligne avec les garanties du § 3 | P04 devient « intégration » (CADRAGE § 1.6) |
@@ -182,7 +182,7 @@ réalisation ; P02 est porté par `libre-ai/information-watch` et le code P02 de
 (`crates/p02-domain`, `crates/p02-fetch`, `crates/p02-store`, `crates/p02-worker`, `apps/p02-api`,
 `vendored/contracts/p02-job-v1`) devient une référence : il n'est plus un produit de ce dépôt, aucun
 critère d'acceptation ne le mesure ici, et sa reprise par `information-watch` passe par un import
-avec provenance (`ADR-0042:189-194`, acte 3). Son retrait de l'arbre n'est pas décidé par ce
+avec provenance (`ADR-0042:183-191`, acte 3). Son retrait de l'arbre n'est pas décidé par ce
 document.
 
 Argumentaire :
@@ -208,8 +208,9 @@ sans objet. Chevauchements nommés sans fusion de spec (liste complète avec sou
 `signalement` (capture par extension), `square-control` (P40, exempté d'extension, coquille Tauri 2
 à sa première fenêtre).
 
-Moyen de validation : (a) la fiche `project.v1.yaml` déclare P01 et P03 à P07, le chantier P04 et
-un critère de sortie par phase (critères CA-1, CA-46) ; (b) la série de mesures du protocole, verte,
+Moyen de validation : (a) la fiche `project.v1.yaml` doit déclarer P01 et P03 à P07, le chantier P04
+et un critère de sortie par phase (critères CA-1, CA-46 ; elle ne le fait pas au 2026-10-23, CA-1
+est rouge) ; (b) la série de mesures du protocole, verte,
 est le critère de sortie de la qualification de P04 (critères CA-43, CA-44 ; `ADR-0057:52`) ; (c)
 le journal local de CA-31 sur 28 jours ; à défaut de (c), si le journal lu le jour 29 donne moins de
 24 jours avec note créée ou modifiée, AB-6 renvoie la part P04 au gel.
@@ -224,7 +225,7 @@ ADR-0044. Ces amendements sont faits : ce document ne porte plus de position, il
 | 0042 § 6 et § 8 | amendé par ADR-0057 § 1 | l'adaptateur macOS est nommé : coquille Tauri 2 ; « native » devient « Tauri 2 » ; extension, native messaging par stdio, aucun port, signature et notarisation inchangés | `ADR-0057:34-40` ; `REGISTRE:102` (D96) |
 | 0042 § 7 | amendé par ADR-0054 § 2 | ce dépôt porte P01 et P03 à P07 ; P02 a son dépôt ; le code P02 d'ici est une référence | `ADR-0054:35-41` |
 | 0044 D1, D2, D4 | amendé par ADR-0057 § 2 et § 3 | éditeur CodeMirror 6 dans la coquille Tauri 2 ; cœur Rust appelé par le pont Tauri, plus par UniFFI ; mesures de la voie (b) devenues seuils de qualification, dont l'accessibilité à 100 % ; série = critère de sortie de la qualification, pas précondition au code | `ADR-0057:42-66` ; `REGISTRE:103` (D97) |
-| 0044 D3 | en vigueur mot pour mot | aucun caractère modifié que la personne n'a pas tapé | `ADR-0044:19` ; `ADR-0057:44` |
+| 0044 D3 | en vigueur mot pour mot | aucun caractère modifié que la personne n'a pas tapé | `ADR-0044:19` ; `ADR-0057:46` |
 | 0054 § 3 | généralisé par ADR-0057 § 4 | plafond de mémoire figé avant mesure (500 Mio pour P04, valeur propre de NFR-10 ; 512 MiB à défaut) ; qualification macOS : runner macOS, `lsof -i -P`, `codesign --verify --strict`, `spctl --assess`, ticket de notarisation, parcours Playwright webkit ; mobiles, Windows et Linux au second palier | `ADR-0057:68-74` ; `REGISTRE:104` (D98) |
 | 0041, 0033, 0035, 0038, 0039, 0040, 0043, 0047, 0052 | sans effet direct | aucun | position de la mission reprise sans changement |
 
@@ -232,8 +233,10 @@ ADR-0044. Ces amendements sont faits : ce document ne porte plus de position, il
 
 Le tableau ci-dessous est limité au jalon ouvert par ADR-0057 pour P04 : protocole de mesure,
 coquille, pont, éditeur, série de mesures, qualification macOS. Les critères qu'il cite sont ceux
-du cahier § 8 déclarés `[état : à construire]` pour ce jalon (CA-34 à CA-46) ; les critères déjà
-verts ou portés par d'autres chantiers (CA-1 à CA-17, CA-31, CA-32) ne sont pas découpés ici.
+du cahier § 8 déclarés `[état : à construire]` pour ce jalon (CA-34 à CA-46) ; les autres critères
+ne sont pas découpés ici. Au 2026-10-23, CA-3 à CA-6, CA-9 à CA-12 et CA-17 sont verts ; CA-1, CA-2,
+CA-8, CA-14 et CA-32 sont rouges, CA-7 et CA-13 partiels, CA-15, CA-16 et CA-31 à construire, sans
+paquet dans ce jalon (rejouer `grep -n 'état :' docs/cahier-des-charges.md`).
 
 Ordre : le paquet WP-1 précède toute mesure (le protocole et le corpus sont commités avant la
 première mesure, `INVARIANTS:14`, I-08) ; les paquets WP-2, WP-3 et WP-4 construisent la coquille,
