@@ -8,8 +8,9 @@ import {
   citedScripts,
   goldenVectorsPath,
   inventoryGoldenVectors,
+  parseAnnouncedScripts,
   QualificationInputError,
-  undeclaredScripts,
+  reconcileScripts,
 } from "./inputs";
 import { parseResourceClassManifest } from "./resource-class";
 
@@ -19,6 +20,7 @@ import { parseResourceClassManifest } from "./resource-class";
  * examined: a verdict without volume is compatible with having examined nothing.
  */
 const root = process.cwd();
+const ANNOUNCED_SCRIPTS_PATH = "tools/qualification/notebook-core-v2/announced-scripts.v1.json";
 
 function trackedMarkdown(): string[] {
   const listing = Bun.spawnSync({
@@ -68,19 +70,36 @@ function run(): string[] {
       cited.push(citation);
     }
   }
-  const declared = new Map(
-    [...new Set(cited.map(({ cwd }) => cwd))].map((cwd) => [cwd, declaredScripts(cwd)]),
+  const announced = parseAnnouncedScripts(
+    JSON.parse(readFileSync(join(root, ANNOUNCED_SCRIPTS_PATH), "utf8")),
   );
-  const missing = undeclaredScripts(cited, declared);
-  if (missing.length > 0) {
-    throw new QualificationInputError(
-      `documented scripts that no package.json declares: ${missing
-        .map(({ cwd, script }) => `${cwd === "." ? "" : `${cwd}: `}${script}`)
-        .join(", ")}`,
-    );
-  }
+  const declared = new Map(
+    [...new Set([...cited, ...announced].map(({ cwd }) => cwd))].map((cwd) => [
+      cwd,
+      declaredScripts(cwd),
+    ]),
+  );
+  const { delivered, undeclared, unused } = reconcileScripts(cited, declared, announced);
+  const describe = ({ cwd, script }: CitedScript): string =>
+    `${cwd === "." ? "" : `${cwd}: `}${script}`;
+  const problems = [
+    ...(undeclared.length > 0
+      ? [`documented scripts that no package.json declares: ${undeclared.map(describe).join(", ")}`]
+      : []),
+    ...(delivered.length > 0
+      ? [
+          `announced scripts now declared, remove them from the list: ${delivered.map(describe).join(", ")}`,
+        ]
+      : []),
+    ...(unused.length > 0
+      ? [
+          `announced scripts that no document cites, remove them from the list: ${unused.map(describe).join(", ")}`,
+        ]
+      : []),
+  ];
+  if (problems.length > 0) throw new QualificationInputError(problems.join("; "));
   lines.push(
-    `documented scripts: ${cited.length} distinct invocations in ${documents.length} documents, all declared`,
+    `documented scripts: ${cited.length} distinct invocations in ${documents.length} documents, ${cited.length - announced.length} declared, ${announced.length} announced by a work package`,
   );
   return lines;
 }

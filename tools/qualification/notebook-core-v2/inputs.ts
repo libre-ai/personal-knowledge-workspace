@@ -148,6 +148,78 @@ export function undeclaredScripts(
   return cited.filter(({ cwd, script }) => !(declared.get(cwd)?.has(script) ?? false));
 }
 
+/**
+ * A script that a work package of docs/prd.md has not delivered yet, but that
+ * the PRD must cite as the verification command of that package. Announcing it
+ * is explicit and counted; the entry leaves the list in the package that
+ * declares the script, so the list cannot outlive the work it stands for.
+ */
+export type AnnouncedScript = CitedScript & { workPackage: string };
+
+const ANNOUNCED_SCHEMA = "announced-scripts.v1";
+const ANNOUNCED_KEYS = ["cwd", "script", "workPackage"];
+
+export function parseAnnouncedScripts(value: unknown): AnnouncedScript[] {
+  if (!isRecord(value) || value.schemaVersion !== ANNOUNCED_SCHEMA) {
+    throw new QualificationInputError(
+      `announced scripts: schemaVersion must be ${ANNOUNCED_SCHEMA}`,
+    );
+  }
+  if (!Array.isArray(value.scripts)) {
+    throw new QualificationInputError("announced scripts: scripts is not an array");
+  }
+  const seen = new Set<string>();
+  return value.scripts.map((entry: unknown, index: number): AnnouncedScript => {
+    const label = `announced scripts[${index}]`;
+    if (!isRecord(entry)) throw new QualificationInputError(`${label}: not an object`);
+    const keys = Object.keys(entry).sort();
+    if (keys.join() !== ANNOUNCED_KEYS.join()) {
+      throw new QualificationInputError(
+        `${label}: keys must be exactly ${ANNOUNCED_KEYS.join(", ")}`,
+      );
+    }
+    const { cwd, script, workPackage } = entry;
+    for (const [name, field] of [
+      ["cwd", cwd],
+      ["script", script],
+      ["workPackage", workPackage],
+    ]) {
+      if (typeof field !== "string" || field.length === 0) {
+        throw new QualificationInputError(`${label}: ${name} must be a non-empty string`);
+      }
+    }
+    const key = `${cwd}\u0000${script}`;
+    if (seen.has(key)) throw new QualificationInputError(`${label}: duplicate ${cwd} ${script}`);
+    seen.add(key);
+    return { cwd: cwd as string, script: script as string, workPackage: workPackage as string };
+  });
+}
+
+export type ScriptReconciliation = {
+  /** Announced, yet declared by its package.json: the entry must leave the list. */
+  delivered: AnnouncedScript[];
+  /** Cited, neither declared nor announced. */
+  undeclared: CitedScript[];
+  /** Announced, yet cited by no document. */
+  unused: AnnouncedScript[];
+};
+
+export function reconcileScripts(
+  cited: CitedScript[],
+  declared: Map<string, Set<string>>,
+  announced: AnnouncedScript[],
+): ScriptReconciliation {
+  const isDeclared = ({ cwd, script }: CitedScript): boolean =>
+    declared.get(cwd)?.has(script) ?? false;
+  const sameScript = (a: CitedScript, b: CitedScript): boolean =>
+    a.cwd === b.cwd && a.script === b.script;
+  return {
+    delivered: announced.filter(isDeclared),
+    undeclared: cited.filter((c) => !isDeclared(c) && !announced.some((a) => sameScript(a, c))),
+    unused: announced.filter((a) => !cited.some((c) => sameScript(a, c))),
+  };
+}
+
 const REQUIRED_RELEASE_PROFILE = {
   "codegen-units": 1,
   lto: true,
