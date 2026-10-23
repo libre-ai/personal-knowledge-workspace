@@ -31,7 +31,15 @@ const REFUSED_ENV: &[&str] = &["TAURI_CONFIG"];
 /// registered in the handler but absent here has no permission and is refused.
 /// `capabilities/main.json` lists the same names, and `tests/shell/config.test.ts`
 /// fails on any drift between the two.
-const COMMANDS: &[&str] = &["shell_ping"];
+const COMMANDS: &[&str] = &[
+    "shell_ping",
+    "open_vault",
+    "read_note",
+    "write_note",
+    "render_preview",
+    "search",
+    "rebuild_index",
+];
 
 /// tauri-build writes one `<command>.toml` per command of `COMMANDS` into this
 /// gitignored directory and never deletes the file of a removed command: its

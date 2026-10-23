@@ -33,11 +33,13 @@ custom-protocol = ["tauri/custom-protocol"]
 tauri-build.workspace = true
 
 [dependencies]
+libre-ai-notebook-vault = { path = "../../../crates/notebook-vault" }
+serde.workspace = true
+serde_json.workspace = true
 tauri.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 tauri = { workspace = true, features = ["test"] }
 
 [lints]

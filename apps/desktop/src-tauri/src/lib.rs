@@ -1,18 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Libre AI contributors
 // SPDX-License-Identifier: EUPL-1.2
 
-//! P04 desktop shell (ADR-0057 section 2). The shell carries no domain bridge:
-//! the front it serves can call the commands of `build.rs` and nothing else.
+//! P04 desktop shell (ADR-0057 section 2). The front it serves can call the
+//! commands of `build.rs` and nothing else: the liveness probe of the shell and
+//! the six commands of the vault bridge (`bridge`).
+
+pub mod bridge;
 
 use tauri::utils::config::WindowConfig;
 use tauri::{Builder, Context, Manager, Runtime, Url, WebviewWindowBuilder};
 
-/// Commands of the bridge. They live in a module because `#[tauri::command]`
+/// Commands of the shell. They live in a module because `#[tauri::command]`
 /// on a `pub fn` at the crate root defines its helper macros twice.
 pub mod commands {
-    /// Liveness probe of the bridge. It is the one declared command of this work
-    /// package: the positive control that tells a refused undeclared command from
-    /// a bridge that refuses everything.
+    /// Liveness probe of the bridge. It is the positive control that tells a
+    /// refused undeclared command from a bridge that refuses everything.
     #[tauri::command]
     pub fn shell_ping() -> &'static str {
         "pong"
@@ -40,9 +42,20 @@ pub fn context<R: Runtime>() -> Context<R> {
     tauri::generate_context!()
 }
 
-/// Registers the commands of the shell, those listed in `build.rs`.
+/// Registers the commands of the shell, those listed in `build.rs`, and the
+/// state of the vault bridge.
 pub fn with_commands<R: Runtime>(builder: Builder<R>) -> Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![commands::shell_ping])
+    builder
+        .manage(bridge::VaultState::default())
+        .invoke_handler(tauri::generate_handler![
+            commands::shell_ping,
+            bridge::open_vault,
+            bridge::read_note,
+            bridge::write_note,
+            bridge::render_preview,
+            bridge::search,
+            bridge::rebuild_index
+        ])
 }
 
 /// Takes the creation of the main window out of Tauri's hands and returns its
