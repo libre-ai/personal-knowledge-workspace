@@ -25,8 +25,8 @@ l'analyse de mission et ne sont pas dans ce dépôt.
 Projet : `libre-ai/personal-knowledge-workspace`, dépôt du domaine Connaissance, marque publique
 « Libre AI Knowledge Workspace » (LEXICON § 14.1). Produits portés : P01 et P03 à P07
 (`ADR-0042:162-199`, § 7, amendé par `ADR-0054:35-41`, § 2). Produit en réalisation : P04. SHA lu :
-`aec3eba39c192a66e2d32e74c4b11a8e614b9718` (`git rev-parse HEAD` dans le clone de la branche
-servie). Chemins relatifs à la racine du dépôt sauf préfixe. Positionnement : « décision de
+`aec3eba39c192a66e2d32e74c4b11a8e614b9718`, tête de la branche servie quand ce document a été écrit
+(`git rev-parse HEAD` dans le clone de la branche servie ; la tête servie avance, voir `prd.md`). Chemins relatifs à la racine du dépôt sauf préfixe. Positionnement : « décision de
 mission du 2026-10-14 » (CADRAGE § 1.2) ; les P-xx entrent au catalogue parce que le propriétaire
 en a exprimé le besoin ; leur lien au socle est d'être fabriqués par la méthode avec preuves
 versionnées (I-13, I-15).
@@ -63,7 +63,7 @@ versionnées (I-13, I-15).
   mission.
 - **Spécification héritée** — `docs/apps/notebook.md:6` cite ADR-0002 et des chemins de contrats
   qui vivent dans `schemas-and-contracts` ; c'est la spécification du code récupéré, antérieure à
-  ADR-0042. `docs/product-readiness.md` est retiré au profit de la fiche.
+  ADR-0042. `docs/product-readiness.md` est déclassé au profit de la fiche (le fichier reste dans l'arbre).
 - **Fiche sans phase P04** — la fiche n'a ni phase de qualification de P04, ni plafond de mémoire
   figé, ni critère de sortie « série de mesures verte » (`ADR-0057:52`, `ADR-0057:72`). Voir le
   critère CA-46.
@@ -262,7 +262,7 @@ Chapitres sans code (exigences de cadrage, pas de critère) :
   un journal, un message d'erreur ou un artefact (PRD 11 NFR-15 ; `crates/notebook-core/src/model.rs:41-50`).
 - ENF-2 **Sécurité** : CSP de `web-platform` sur toute surface HTML servie par Bun, seul
   relâchement nommé `'wasm-unsafe-eval'`, échec fermé si la base attendue manque (I-37 ;
-  `apps/notebook/src/server/handler.ts:81-85`) ; dans la coquille Tauri, CSP `default-src 'none'`
+  `apps/notebook/src/server/handler.ts:75-81`) ; dans la coquille Tauri, CSP `default-src 'none'`
   élargie aux seules origines du schéma privé (EF-P04-8, contrôle 3).
 - ENF-3 **Sécurité** : le workspace déclare `unsafe_code = "forbid"` et `unwrap`, `expect`,
   `panic`, `todo`, `unimplemented`, `indexing_slicing` en `deny` (`Cargo.toml:81-90`) ;
@@ -329,7 +329,7 @@ Menaces prises en compte, avec la parade existante ou exigée :
 | --- | --- | --- |
 | Oracle sur le secret de récupération | secret invalide remplacé par une constante et passé au même KDF | réalisé (`crates/notebook-core/src/lib.rs:139-150`) |
 | Fuite de plaintext dans le navigateur (host Gate B) | worker jetable par opération, transfert d'ownership, effacement best-effort, aucune persistance du recovery | réalisé sur fixture ; effacement physique non prouvé (`apps/notebook/README.md:27`) |
-| Fuite de contenu par les journaux | erreurs sans donnée ; `Debug` d'`OpenedBackup` n'expose que la taille ; scan des journaux à construire | partiel (CA-7) |
+| Fuite de contenu par les journaux | erreurs sans donnée ; `Debug` d'`OpenedBackup` expose `schema_version`, `id`, `digest` et la taille (`model.rs:41-50`) ; scan des journaux à construire | partiel (CA-7) |
 | Chemin ou nom d'utilisateur embarqué dans un artefact | remap et scan des artefacts (Y40) | réalisé (CA-5) ; à étendre au bundle de la coquille |
 | Dépendance cryptographique altérée | copie vendorisée avec SHA-256 déclaré et diff d'une ligne ; `cargo deny` sources | réalisé ; gate de provenance I-28 à vérifier (AB-4) |
 | Exécution de contenu actif (SVG, HTML, script) dans une note | aperçu rendu par attributs, jamais par HTML interprété (`render_preview`) ; CSP `default-src 'none'` ; assainissement par liste blanche ; types actifs jamais exécutés | CSP du host réalisée ; aperçu et assainisseur absents du SHA (CA-39, CA-41) |
@@ -376,7 +376,7 @@ Transverses au dépôt :
   servie pour le commit livré. Validation :
   `gh run list -R libre-ai/personal-knowledge-workspace --commit SHA --json name,conclusion`
   contient au moins un `success` pour chacun des noms `Code validation` et `Notebook WebKit macOS`
-  et aucun `failure` (rejoué au SHA : 3 runs, 3 `success`) ; ce critère recouvre les critères
+  et aucun `failure` (rejoué au SHA le 2026-10-23 : 5 runs, 5 `success`) ; ce critère recouvre les critères
   numérotés CA-5, CA-6, CA-9 (première moitié) et CA-13 (première moitié), qui sont des étapes
   de `bun run check` (`package.json:50`).
 - CA-5 [état : vert] Aucun chemin machine dans les binaires et modules livrés. Validation :
@@ -389,8 +389,9 @@ Transverses au dépôt :
 - CA-7 [état : partiel] Aucune chaîne du corpus de test (contenu de note, chemin de dossier,
   secret) n'apparaît dans les journaux produits par les suites e2e du host et de la coquille.
   Validation : scan des journaux e2e par les chaînes du corpus → 0 occurrence (PRD 11 NFR-15 ;
-  scan à construire, aucun scan de journaux dans `bun run check`) ; `Debug` d'`OpenedBackup` limité
-  à la taille (`crates/notebook-core/src/model.rs:41-50`, existant).
+  scan à construire, aucun scan de journaux dans `bun run check`) ; `Debug` d'`OpenedBackup` à limiter
+  à la taille (il expose aujourd'hui `schema_version`, `id`, `digest` et la taille :
+  `crates/notebook-core/src/model.rs:41-50`).
 - CA-8 [état : rouge] Chaque clé `@libre-ai/*` du bloc `overrides` de `package.json` est déclarée
   en `dependencies` ou `devDependencies` d'un des `package.json` du workspace, ou importée, ou
   justifiée dans `docs/`. Validation :
@@ -496,7 +497,8 @@ P04, jalon ADR-0057 — coquille Tauri 2 (paquet WP-2) :
   dans la coquille lancée : une requête du front vers une URL hors du schéma privé est refusée et
   comptée ; une commande non déclarée dans la capacité est refusée et comptée ; une écriture dans
   le magasin persistant de la vue web est refusée et comptée ; aucun port n'est en écoute pour le
-  PID du processus Rust. Validation : `cargo test --locked -p libre-ai-p04-desktop shell_controls`
+  PID du processus Rust, le contrôle étant vu rouge quand un écouteur TCP est ouvert volontairement
+  dans le processus de test (une ligne rendue par `lsof`, le contrôle échoue). Validation : `cargo test --locked -p libre-ai-p04-desktop shell_controls`
   (trois refus comptés) et `lsof -i -P -a -p PID` → 0 ligne pendant `bun run --cwd apps/desktop test:e2e` ;
   le compteur de refus est imprimé.
 
@@ -668,7 +670,7 @@ Apache-2.0, dernière release `tauri-cli-v2.12.4` du 2026-10-21, `ADR-0057:27`),
 
 | # | Risque | Effet | Mesure / parade |
 | --- | --- | --- | --- |
-| R1 | NFR-10 rouge sous Tauri : 413 Mio mesurés sans index sur la voie (b), 240 Mio de processus GPU WebKit (`ADR-0044:45`), contre un plafond de 500 Mio avec index ; « risque élevé de rouge » écrit dans l'option retenue par le propriétaire (`ADR-0057:90`) | retour au natif pour P04 par ADR ; le code de l'éditeur avance sous ce risque nommé | CA-44 ; plafond figé (ENF-7) ; protocole commité d'abord (CA-36) |
+| R1 | NFR-10 rouge sous Tauri : 413 Mio mesurés sans index sur la voie (b), 240 Mio de processus GPU WebKit (`ADR-0044:45`), contre un plafond de 500 Mio avec index ; « risque élevé de rouge » écrit dans l'option retenue par le propriétaire (`ADR-0057:92`) | retour au natif pour P04 par ADR ; le code de l'éditeur avance sous ce risque nommé | CA-44 ; plafond figé (ENF-7) ; protocole commité d'abord (CA-36) |
 | R2 | Accessibilité rouge : 0,54 % du texte exposé sur la voie (b) (`ADR-0044:47`) ; l'arbre doit être maintenu par le front | même décision de surface | EF-P04-11 ; CA-44 |
 | R3 | Modèle par blocs encore présent et planifié par `ROADMAP.md:9-13` alors que Y3 le retire comme autorité | double modèle, format verrouillé | Q2 de la mission ; EF-P04-4 ; CA-15 |
 | R4 | Campagnes produit refusant la build migrée (`QUALIFIED_CORE_SHA256` historique) | Gate B non rejouable sur le code courant tant que le matériel de référence n'a pas rejoué | Q9 de la mission ; CA-14 ; AB-3 |

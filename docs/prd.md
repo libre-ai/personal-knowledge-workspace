@@ -17,8 +17,10 @@ Portée du niveau : ce document est une proposition. La fiche porte `maturity: i
 (`project.v1.yaml:27`) : autre échelle, écart consigné (`cahier-des-charges.md` § 1).
 
 Projet : `libre-ai/personal-knowledge-workspace`, dépôt du domaine Connaissance, lu au SHA
-`aec3eba39c192a66e2d32e74c4b11a8e614b9718` (`git rev-parse HEAD` dans le clone de la branche
-servie, résolue par `git ls-remote --symref https://github.com/libre-ai/personal-knowledge-workspace HEAD`).
+`aec3eba39c192a66e2d32e74c4b11a8e614b9718`, tête de la branche servie quand ce document a été
+écrit (`git rev-parse HEAD` dans le clone de la branche servie, résolue par
+`git ls-remote --symref https://github.com/libre-ai/personal-knowledge-workspace HEAD`) ; la tête servie
+avance, et `git merge-base --is-ancestor` de ce SHA contre elle le vérifie.
 Les chemins sans préfixe sont relatifs à la racine de ce dépôt. Les faits d'état sont établis dans
 `cahier-des-charges.md` § 1 ; ce document porte la décision de produit.
 
@@ -105,7 +107,7 @@ propriétaire » (`ADR-0042:78-80`).
 ## 5. Métriques associées à une décision
 
 Chaque métrique nomme la décision qu'elle déclenche et son seuil. Source des seuils : PRD 11
-§ 3.3, restitués par `ADR-0044:37-48` et repris sans révision par `ADR-0057:56-64` ; figés avant
+§ 1 et § 3.6, restitués par `ADR-0044:37-48` et repris sans révision par `ADR-0057:56-64` ; figés avant
 mesure (`ADR-0042:146-161`, § 6 ; `INVARIANTS:14`, I-08). Aucune métrique n'est mesurée sous Tauri
 au SHA : la colonne « Valeur courante » le dit. La colonne « Mesure datée » restitue les relevés du
 2026-10-08 et du 2026-10-09 (`ADR-0044:37-48`), faits sur des prototypes hors dépôt, voie (a)
@@ -150,7 +152,7 @@ kivikakk/comrak NOASSERTION, quickwit-oss/tantivy MIT, meilisearch/meilisearch N
 unclecode/crawl4ai Apache-2.0, zotero/zotero NOASSERTION, JabRef/jabref MIT, citation-js/citation-js
 MIT, bookstackapp/bookstack MIT, suitenumerique/docs MIT, valeriansaliou/sonic MPL-2.0,
 open-spaced-repetition/fsrs-rs BSD-3-Clause, open-spaced-repetition/ts-fsrs MIT ; aucun de ces
-dépôts n'était archivé à cette date. Tauri : fichiers `LICENSE-MIT` et `LICENSE-APACHE-2.0` à la
+dépôts n'était archivé à cette date. Tauri : fichiers `LICENSE-MIT`, `LICENSE-APACHE-2.0` et `LICENSE.spdx` à la
 racine, relevé du 2026-10-23 (`ADR-0057:24-27`). Les cellules non couvertes par ces relevés portent
 `[NON VÉRIFIÉ]` ; le critère CA-42 les rejoue à l'épinglage.
 
@@ -162,10 +164,10 @@ racine, relevé du 2026-10-23 (`ADR-0057:24-27`). Les cellules non couvertes par
 | P04 notes | Memos | MIT | référence |
 | P04 notes | Obsidian, Notion | propriétaires `[NON VÉRIFIÉ]` | références seulement, aucun code (`ADR-0042:109-130`, § 4) |
 | P04 chiffrement | RustCrypto `aes-gcm`, `argon2` | Apache-2.0 ou MIT `[NON VÉRIFIÉ]` | dépendances, `aes` 0.8.4 patché sous gate I-28 |
-| P04 parse Markdown | `pulldown-cmark` (MIT), `comrak` (BSD-2-Clause) | | candidats du cœur Rust ; départage par le critère CA-16 ; `pulldown-cmark` 0.13.4 a servi aux mesures d'ADR-0044 (`ADR-0044:51`) |
+| P04 parse Markdown | `pulldown-cmark` (MIT), `comrak` (BSD-2-Clause selon `COPYING` et `Cargo.toml`, PRD 11 ; relevé API `NOASSERTION`) | | candidats du cœur Rust ; départage par le critère CA-16 ; `pulldown-cmark` 0.13.4 a servi aux mesures d'ADR-0044 (`ADR-0044:51`) |
 | P04/P06 index | `tantivy` | MIT | candidat du cœur Rust ; `tantivy` 0.26.2 a servi aux mesures d'ADR-0044 ; rachat signalé (PRD 11 R11) : risque R9 |
 | P01 collecte | crawl4ai (Apache-2.0) | | non évalué ; Agent-Reach écarté (0 canal conforme, décision de session du 2026-10-09 hors de ce dépôt `[NON VÉRIFIÉ]`) |
-| P03 bibliographie | Zotero | AGPL-3.0 (`ADR-0042` § 4 ; relevé API `NOASSERTION`) | intégration par API seulement ; jamais en dépendance |
+| P03 bibliographie | Zotero | AGPL-3.0 (`ADR-0042` § 4 ; relevé API `NOASSERTION`, non reconfirmé `[NON VÉRIFIÉ]`) | intégration par API seulement ; jamais en dépendance |
 | P03 références | JabRef, citation-js | MIT | candidats d'intégration |
 | P05 wiki | BookStack, suitenumerique/docs | MIT | candidats d'intégration ; décision avant tout code (Q7 de la mission) |
 | P06 recherche | Tantivy, Meilisearch (cœur), Sonic | MIT, NOASSERTION, MPL-2.0 | candidats d'intégration |
@@ -227,7 +229,8 @@ ADR-0044. Ces amendements sont faits : ce document ne porte plus de position, il
 | 0044 D1, D2, D4 | amendé par ADR-0057 § 2 et § 3 | éditeur CodeMirror 6 dans la coquille Tauri 2 ; cœur Rust appelé par le pont Tauri, plus par UniFFI ; mesures de la voie (b) devenues seuils de qualification, dont l'accessibilité à 100 % ; série = critère de sortie de la qualification, pas précondition au code | `ADR-0057:42-66` ; `REGISTRE:103` (D97) |
 | 0044 D3 | en vigueur mot pour mot | aucun caractère modifié que la personne n'a pas tapé | `ADR-0044:19` ; `ADR-0057:46` |
 | 0054 § 3 | généralisé par ADR-0057 § 4 | plafond de mémoire figé avant mesure (500 Mio pour P04, valeur propre de NFR-10 ; 512 MiB à défaut) ; qualification macOS : runner macOS, `lsof -i -P`, `codesign --verify --strict`, `spctl --assess`, ticket de notarisation, parcours Playwright webkit ; mobiles, Windows et Linux au second palier | `ADR-0057:68-74` ; `REGISTRE:104` (D98) |
-| 0041, 0033, 0035, 0038, 0039, 0040, 0043, 0047, 0052 | sans effet direct | aucun | position de la mission reprise sans changement |
+| 0041 | accepté, déjà appliqué | aucun : le nom de dépôt et l'absorption de P05 sont déjà appliqués | position de la mission (`repositories.v1.yaml:88`) |
+| 0033, 0035, 0038, 0039, 0040, 0043, 0047, 0052 | sans effet direct | aucun | position de la mission reprise sans changement |
 
 ## 10. Paquets de travail
 
