@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Libre AI Knowledge Workspace",
+  "version": "0.1.0",
+  "identifier": "org.libre-ai.p04-desktop",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Libre AI Knowledge Workspace",
+        "incognito": true
+      }
+    ],
+    "security": {
+      "freezePrototype": true,
+      "csp": {
+        "default-src": "'none'",
+        "script-src": "'self'",
+        "style-src": "'self'",
+        "img-src": "'self'",
+        "font-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost"
+      }
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

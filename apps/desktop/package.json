@@ -1,0 +1,21 @@
+{
+  "name": "@libre-ai/p04-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "EUPL-1.2",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "check:bun": "bun ../../node_modules/@libre-ai/governance/tools/quality/check-bun-minimum.ts",
+    "prebuild": "bun run check:bun",
+    "build": "bun scripts/build.ts",
+    "pretest": "bun run check:bun",
+    "test": "bun test tests/shell",
+    "pretypecheck": "bun run check:bun",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "pretest:e2e": "bun run check:bun",
+    "test:e2e": "bun tests/shell/e2e.ts"
+  }
+}

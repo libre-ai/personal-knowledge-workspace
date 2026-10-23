@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Rights of the front: one entry per command of build.rs, nothing else.",
+  "windows": ["main"],
+  "permissions": ["allow-shell-ping"]
+}
