@@ -14,6 +14,10 @@
         "typescript": "7.0.2",
       },
     },
+    "apps/desktop": {
+      "name": "@libre-ai/p04-desktop",
+      "version": "0.1.0",
+    },
     "apps/notebook": {
       "name": "@libre-ai/notebook",
       "version": "0.1.0",
@@ -96,6 +100,8 @@
     "@libre-ai/notebook": ["@libre-ai/notebook@workspace:apps/notebook"],
 
     "@libre-ai/p02-api": ["@libre-ai/p02-api@workspace:apps/p02-api"],
+
+    "@libre-ai/p04-desktop": ["@libre-ai/p04-desktop@workspace:apps/desktop"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.3", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.4", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.4" } }, "sha512-UMduMbqO5s5zF2NkNacMT/yK5Y5QiKvWr2+50bzIIxFDwVJ2h49b+oyjaCGPhJxd2/gC2x39EHv/gHVuu36x2Q=="],
 

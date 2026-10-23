@@ -8,6 +8,18 @@ members = [
   "crates/p02-fetch",
   "crates/p02-store",
   "crates/p02-worker",
+  "apps/desktop/src-tauri",
+]
+# The P04 desktop shell links WKWebView: it builds and runs on macOS only
+# (ADR-0057 section 4). A bare `cargo test --locked` on the Linux composition
+# runner therefore stays on the crates below; the shell is addressed by
+# `-p libre-ai-p04-desktop` (`bun run check:p04-shell`).
+default-members = [
+  "crates/notebook-core",
+  "crates/p02-domain",
+  "crates/p02-fetch",
+  "crates/p02-store",
+  "crates/p02-worker",
 ]
 resolver = "2"
 
@@ -56,6 +68,13 @@ tokio = { version = "=1.53.2", default-features = false }
 tokio-postgres = { version = "=0.7.18", features = ["with-serde_json-1"] }
 tokio-rustls ={ version = "=0.26.6", default-features = false, features = ["ring", "tls12"] }
 url = "=2.5.8"
+
+# P04 desktop shell (ADR-0057). Exact versions, each published at least three
+# days before adoption (CA-42). `default-features = false` drops `dynamic-acl`
+# (capabilities added at run time would defeat the enumerated, deny-by-default
+# bridge), the X11 and D-Bus Linux backends and the Windows common controls.
+tauri = { version = "=2.12.4", default-features = false, features = ["wry", "compression"] }
+tauri-build = { version = "=2.7.3", default-features = false, features = ["config-json"] }
 
 # Release profile of the notebook-core wasm build. Without it the module is
 # larger and keeps a `name` section whose symbol hashes follow the checkout

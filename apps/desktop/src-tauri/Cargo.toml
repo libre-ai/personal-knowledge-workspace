@@ -1,0 +1,44 @@
+[package]
+name = "libre-ai-p04-desktop"
+version = "0.1.0"
+description = "P04 desktop shell: Tauri 2 around the Rust core, under the six controls of ADR-0057 section 2"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "libre_ai_p04_desktop"
+
+[[bin]]
+name = "libre-ai-p04-desktop"
+path = "src/main.rs"
+
+# The shell test launches a real WKWebView, which needs the main thread of its
+# process: libtest would run it on a worker thread, so the target owns `main`.
+[[test]]
+name = "shell_controls"
+harness = false
+
+[features]
+# Production behaviour is the only behaviour: `frontendDist` is embedded in the
+# binary and served through the private scheme, and `devUrl` is never read. It is
+# the default so that no build, test or qualification run exercises a different
+# shell from the one that ships (Tauri's own convention leaves it to `tauri build`).
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+tauri.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tauri = { workspace = true, features = ["test"] }
+
+[lints]
+workspace = true
