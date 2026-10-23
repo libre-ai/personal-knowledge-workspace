@@ -9,7 +9,9 @@ import {
   EXPECTED_VECTOR_COUNTS,
   goldenVectorsPath,
   inventoryGoldenVectors,
+  parseAnnouncedScripts,
   QualificationInputError,
+  reconcileScripts,
   undeclaredScripts,
 } from "./inputs";
 
@@ -121,6 +123,83 @@ describe("scripts cited by documentation", () => {
     expect(
       undeclaredScripts([{ cwd: "apps/missing", script: "build" }], new Map([[".", new Set()]])),
     ).toEqual([{ cwd: "apps/missing", script: "build" }]);
+  });
+});
+
+describe("scripts announced by a work package", () => {
+  const announced = (cwd: string, script: string, workPackage = "WP-2") => ({
+    cwd,
+    script,
+    workPackage,
+  });
+
+  test("parses the announced list and accepts an empty one", () => {
+    expect(parseAnnouncedScripts({ schemaVersion: "announced-scripts.v1", scripts: [] })).toEqual(
+      [],
+    );
+    expect(
+      parseAnnouncedScripts({
+        schemaVersion: "announced-scripts.v1",
+        scripts: [announced(".", "check:p04-shell")],
+      }),
+    ).toEqual([announced(".", "check:p04-shell")]);
+  });
+
+  test("refuses a list it cannot read exactly", () => {
+    const refused: unknown[] = [
+      null,
+      [],
+      { schemaVersion: "announced-scripts.v2", scripts: [] },
+      { schemaVersion: "announced-scripts.v1" },
+      { schemaVersion: "announced-scripts.v1", scripts: {} },
+      { schemaVersion: "announced-scripts.v1", scripts: [{ cwd: ".", script: "a" }] },
+      { schemaVersion: "announced-scripts.v1", scripts: [announced("", "a")] },
+      { schemaVersion: "announced-scripts.v1", scripts: [announced(".", "a", "")] },
+      { schemaVersion: "announced-scripts.v1", scripts: [{ ...announced(".", "a"), extra: 1 }] },
+      {
+        schemaVersion: "announced-scripts.v1",
+        scripts: [announced(".", "a"), announced(".", "a", "WP-3")],
+      },
+    ];
+    for (const value of refused) {
+      expect(() => parseAnnouncedScripts(value)).toThrow(QualificationInputError);
+    }
+  });
+
+  test("accepts a cited script that is announced but not yet declared", () => {
+    const cited = [{ cwd: ".", script: "check:p04-shell" }];
+    const declared = new Map([[".", new Set(["check"])]]);
+    expect(reconcileScripts(cited, declared, [announced(".", "check:p04-shell")])).toEqual({
+      delivered: [],
+      undeclared: [],
+      unused: [],
+    });
+  });
+
+  test("still reports a cited script that is neither declared nor announced", () => {
+    const cited = [{ cwd: ".", script: "check:p04-shell" }];
+    const declared = new Map([[".", new Set(["check"])]]);
+    expect(reconcileScripts(cited, declared, []).undeclared).toEqual(cited);
+  });
+
+  test("reports an announced script that its package.json now declares, so the list cannot rot", () => {
+    const cited = [{ cwd: ".", script: "check:p04-shell" }];
+    const declared = new Map([[".", new Set(["check:p04-shell"])]]);
+    const entry = announced(".", "check:p04-shell");
+    expect(reconcileScripts(cited, declared, [entry])).toEqual({
+      delivered: [entry],
+      undeclared: [],
+      unused: [],
+    });
+  });
+
+  test("reports an announced script that no document cites", () => {
+    const entry = announced("apps/desktop", "test:e2e");
+    expect(reconcileScripts([], new Map(), [entry])).toEqual({
+      delivered: [],
+      undeclared: [],
+      unused: [entry],
+    });
   });
 });
 
