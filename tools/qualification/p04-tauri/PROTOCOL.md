@@ -133,3 +133,11 @@ dans le rapport.
   WP-6.
 - Le choix du paragraphe édité par fichier pour AT-01 est fixé par le harnais de WP-5 avant la
   série et consigné dans le manifeste du rapport ; il ne dépend d'aucun résultat.
+- Les pièges d'octets du § 7 portent sur le contenu des fichiers. Les 10 000 chemins du corpus sont
+  en ASCII (`notes/NN/note-NNNNN.md`) : la normalisation Unicode des noms de fichier (NFC et NFD
+  sur APFS) n'est pas exercée par ce corpus. Un renommage entre les deux formes serait rapporté par
+  l'oracle comme un fichier manquant et un fichier ajouté ; il n'est pas provoqué.
+- L'oracle compare des fichiers réguliers. Un répertoire vide ajouté ou supprimé ne porte aucun
+  octet et n'est pas rapporté ; un lien symbolique, lui, fait refuser la comparaison. Un instantané
+  de référence est produit par l'outil lui-même : l'oracle ne valide pas un instantané écrit à la
+  main (clés dupliquées comprises, la dernière valeur est retenue).
