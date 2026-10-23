@@ -15,6 +15,8 @@ Doctrine lives upstream: https://raw.githubusercontent.com/libre-ai/project-gove
 - `project.v1.yaml` is the authority on project state and admission
   criteria; the README "Project status" section is generated from it —
   never edit that section by hand.
+- Product objectives and work packages have one source, `docs/prd.md`
+  (criteria in `docs/cahier-des-charges.md`).
 - Recovered code (`apps/notebook`, `crates/notebook-core`) is not product
   qualification.
 - Contract shapes are canonical in `libre-ai/schemas-and-contracts`, consumed
