@@ -1,6 +1,6 @@
 # personal-knowledge-workspace — PRD de P04 (notes et mémoire personnelle)
 
-Maturité du document : proposition
+Maturité du document : décision
 
 Provenance : ce document reprend la spécification de mission `specs/personal-knowledge-workspace/prd.md`
 de l'analyse du 2026-10-14 (115 lignes, écrite avant ADR-0054 et ADR-0057) et l'amende sur trois
@@ -13,7 +13,9 @@ la norme sont remplacés. `cahier-des-charges.md` est à côté de ce fichier ; 
 `tests-et-evaluation.md`, `questions-ouvertes.md`, `CADRAGE.md` et `clones.json` désignent
 l'analyse de mission et ne sont pas dans ce dépôt.
 
-Portée du niveau : ce document est une proposition. La fiche porte `maturity: idea`
+Portée du niveau : ce document est une décision du propriétaire, promue par l'arbitrage du
+2026-10-23 (« A — P04 sous Tauri » ; PRD fusionné à proposition, puis promu par une pull request
+dédiée) ; son tableau de paquets de travail est approuvé au sens de la norme. La fiche porte `maturity: idea`
 (`project.v1.yaml:27`) : autre échelle, écart consigné (`cahier-des-charges.md` § 1).
 
 Projet : `libre-ai/personal-knowledge-workspace`, dépôt du domaine Connaissance, lu au SHA
