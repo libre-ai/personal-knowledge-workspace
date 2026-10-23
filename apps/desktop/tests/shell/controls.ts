@@ -224,6 +224,17 @@ export function declaredCommands(buildScript: string): string[] {
   return [...list[1].matchAll(/"([a-z0-9_]+)"/g)].map((match) => match[1] ?? "");
 }
 
+/**
+ * Environment variables `build.rs` refuses, read from its `REFUSED_ENV` list. `tauri-build`
+ * merges them into the configuration, so a build under one of them is not built from the
+ * files the checker above read.
+ */
+export function refusedEnvironment(buildScript: string): string[] {
+  const list = /const\s+REFUSED_ENV\s*:\s*&\[&str\]\s*=\s*&\[([^\]]*)\]/.exec(buildScript);
+  if (list === null || list[1] === undefined) return [];
+  return [...list[1].matchAll(/"([A-Z][A-Z0-9_]*)"/g)].map((match) => match[1] ?? "");
+}
+
 /** Permissions of the capabilities that name a command: `allow-shell-ping` opens `shell_ping`. */
 export function permissionCommands(capabilities: readonly Capability[]): string[] {
   return capabilities.flatMap(({ body }) =>

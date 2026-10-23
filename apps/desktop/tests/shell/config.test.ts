@@ -6,7 +6,7 @@
 // mutates a copy of the real configuration and must be refused by its control.
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -16,6 +16,7 @@ import {
   checkShell,
   type Json,
   readShellFiles,
+  refusedEnvironment,
   type ShellFiles,
 } from "./controls";
 
@@ -218,6 +219,22 @@ describe("red vectors: each violation of a control is refused and counted", () =
     const covered = new Set(VECTORS.map((vector) => vector.control));
     console.log(`vectors: ${VECTORS.length} for ${covered.size} controls`);
     expect([...covered].sort()).toEqual(["C1", "C2", "C3", "C4", "C5"]);
+  });
+});
+
+describe("the build script refuses the variables that rewrite the configuration", () => {
+  // Tauri merges TAURI_CONFIG into the configuration at build time; the files read
+  // above are then not what is built. The dynamic proof is `build-env.test.ts`.
+  const refused = refusedEnvironment(readFileSync(join(SHELL_DIRECTORY, "build.rs"), "utf8"));
+
+  test("TAURI_CONFIG is on the list of build.rs", () => {
+    console.log(`REFUSED_ENV: ${refused.length} variable(s): ${refused.join(", ")}`);
+    expect(refused).toContain("TAURI_CONFIG");
+  });
+
+  test("a build script without the list refuses nothing, which the test above rejects", () => {
+    expect(refusedEnvironment("const REFUSED_ENV: &[&str] = &[];")).toEqual([]);
+    expect(refusedEnvironment("fn main() {}")).toEqual([]);
   });
 });
 

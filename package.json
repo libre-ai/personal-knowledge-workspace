@@ -43,7 +43,7 @@
     "check:p02-api-boundary": "bun run check:bun:runtime && bun node_modules/@libre-ai/governance/tools/quality/check-no-transmission.ts --roots apps/p02-api/src",
     "check:qualification": "bun run check:bun:runtime && bun test tools/qualification/notebook-core-v2 && bun tools/qualification/notebook-core-v2/check-inputs.ts",
     "check:p04-shell-config": "bun run check:bun:runtime && bun test apps/desktop/tests/shell/config.test.ts && bun run --cwd apps/desktop typecheck",
-    "check:p04-shell": "bun run check:bun:runtime && bun run check:p04-shell-config && bun run --cwd apps/desktop build && cargo fmt --check -p libre-ai-p04-desktop && cargo clippy --locked -p libre-ai-p04-desktop --all-targets -- -D warnings && cargo test --locked -p libre-ai-p04-desktop shell_controls -- --nocapture && bun run --cwd apps/desktop test:e2e",
+    "check:p04-shell": "bun run check:bun:runtime && bun apps/desktop/tests/shell/refuse-env.ts && bun run check:p04-shell-config && bun run --cwd apps/desktop build && bun test apps/desktop/tests/shell/build-env.test.ts && cargo fmt --check -p libre-ai-p04-desktop && cargo clippy --locked -p libre-ai-p04-desktop --all-targets -- -D warnings && cargo test --locked -p libre-ai-p04-desktop shell_controls -- --nocapture && bun run --cwd apps/desktop test:e2e",
     "typecheck": "bun run check:bun:runtime && tsc --noEmit -p tsconfig.json",
     "check:dependency-policy": "bun run check:bun:runtime && bun test tools/quality/check-dependency-policy.test.ts && bun tools/quality/check-dependency-policy.ts",
     "lint": "bun run check:bun:runtime && biome ci .",

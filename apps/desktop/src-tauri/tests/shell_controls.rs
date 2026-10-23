@@ -738,6 +738,11 @@ mod macos {
 
         let server = ControlServer::start()?;
         let home = scratch_home()?;
+        // Both homes are created and removed outside the closure: a `?` inside it
+        // must not leave a directory behind (the C4 red variant has its own).
+        let persistent_home = scratch_home().inspect_err(|_| {
+            let _ = std::fs::remove_dir_all(&home);
+        })?;
         let outcome = (|| -> Result<(), Failure> {
             // The product shell: write phase, then a restart that reads back.
             server.reset();
@@ -774,6 +779,11 @@ mod macos {
             let declared = text(&write.report, &["bridge", "declared"])?;
             let undeclared = text(&write.report, &["bridge", "undeclared"])?;
             let frozen = text(&write.report, &["script", "prototype"])?;
+            // One undeclared call is made on the real shell; it counts as refused only
+            // if the page's own call came back refused, so the final line cannot say
+            // `1/1` over a run that let it through.
+            let c5_shell_attempts = 1_usize;
+            let c5_shell_refused = usize::from(undeclared.starts_with("refused"));
             println!(
                 "C5 product: declared -> {declared} ; undeclared -> {undeclared} ; Object.prototype {frozen}"
             );
@@ -860,7 +870,6 @@ mod macos {
                     .to_owned(),
             ));
 
-            let persistent_home = scratch_home()?;
             let persistent_write =
                 run_child(Variant::Persistent, "write", server.port, &persistent_home)?;
             let (_, persistent_written) = stored(&persistent_write.report)?;
@@ -871,18 +880,18 @@ mod macos {
             println!(
                 "C4 variante rouge (fenetre non incognito): {persistent_written} ecriture(s), {persistent_survivors} relue(s) apres redemarrage, {persistent_files} fichier(s) de magasin persistant sur disque"
             );
-            let _ = std::fs::remove_dir_all(&persistent_home);
             red_seen += usize::from(check(
                 persistent_survivors >= 1 && persistent_files >= 1,
                 "C4 red variant: nothing persisted without incognito".to_owned(),
             ));
 
             println!(
-                "shell_controls: refus comptes: C1 {c1_refused}/{c1_attempts} (hors schema), C5 {c5_refused}/{c5_attempts} (mock) + 1/1 (coquille), C4 {c4_refused}/{written} (ecritures non persistees), C6 {listening} port(s) en ecoute ; variantes rouges vues rouges: {red_seen}/4"
+                "shell_controls: refus comptes: C1 {c1_refused}/{c1_attempts} (hors schema), C5 {c5_refused}/{c5_attempts} (mock) + {c5_shell_refused}/{c5_shell_attempts} (coquille), C4 {c4_refused}/{written} (ecritures non persistees), C6 {listening} port(s) en ecoute ; variantes rouges vues rouges: {red_seen}/4"
             );
             Ok(())
         })();
         let _ = std::fs::remove_dir_all(&home);
+        let _ = std::fs::remove_dir_all(&persistent_home);
         server.stop();
         outcome?;
 
