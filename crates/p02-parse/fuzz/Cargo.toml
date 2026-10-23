@@ -1,0 +1,25 @@
+# Coverage-guided fuzzing of `p02_parse::parse_feed` (cargo-fuzz layout).
+# A standalone workspace: it is not a member of the product workspace, and it
+# needs a nightly toolchain for the libFuzzer runtime.
+
+[package]
+name = "p02-parse-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+p02-parse = { path = ".." }
+
+[[bin]]
+name = "parse_feed"
+path = "fuzz_targets/parse_feed.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

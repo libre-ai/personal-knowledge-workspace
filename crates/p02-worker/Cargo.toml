@@ -8,10 +8,16 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# End-to-end suite only: forwards p02-fetch's loopback allowance to the worker
+# binary built for the E2E run. Never enabled by a deployable.
+e2e-loopback = ["p02-fetch/e2e-loopback"]
+
 [dependencies]
 blake3.workspace = true
 p02-domain = { path = "../p02-domain", version = "=0.1.0" }
 p02-fetch = { path = "../p02-fetch", version = "=0.1.0" }
+p02-parse = { path = "../p02-parse", version = "=0.1.0" }
 p02-store = { path = "../p02-store", version = "=0.1.0" }
 serde_json.workspace = true
 thiserror.workspace = true
@@ -21,6 +27,7 @@ tokio-postgres.workspace = true
 [dev-dependencies]
 p02-store = { path = "../p02-store", version = "=0.1.0", features = ["testing"] }
 url.workspace = true
+chrono.workspace = true
 
 [lints]
 workspace = true

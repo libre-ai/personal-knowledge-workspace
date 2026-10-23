@@ -32,6 +32,16 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "sessions",
         sql: include_str!("../migrations/0002_sessions.sql"),
     },
+    Migration {
+        version: 3,
+        name: "items",
+        sql: include_str!("../migrations/0003_items.sql"),
+    },
+    Migration {
+        version: 4,
+        name: "schedules",
+        sql: include_str!("../migrations/0004_schedules.sql"),
+    },
 ];
 
 /// Lock key shared by every migrating process ("p02mig" in ASCII).

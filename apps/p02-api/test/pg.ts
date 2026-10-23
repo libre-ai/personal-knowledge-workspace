@@ -13,6 +13,8 @@ const MIGRATIONS = resolve(import.meta.dir, "../../../crates/p02-store/migration
 export const BOOTSTRAP = "p02_bootstrap";
 export const MIGRATOR = "p02_migrator";
 export const API_LOGIN = "p02_api_login";
+/** The worker's login, provisioned for the end-to-end suite only. */
+export const WORKER_LOGIN = "p02_worker_login";
 export const DATABASE = "p02";
 
 function bindir(): string {
@@ -143,6 +145,9 @@ export async function startCluster(): Promise<TestCluster> {
     const owner = connect(BOOTSTRAP);
     await owner.unsafe(
       `CREATE ROLE ${API_LOGIN} LOGIN NOINHERIT IN ROLE p02_api; GRANT CONNECT ON DATABASE ${DATABASE} TO ${API_LOGIN}`,
+    );
+    await owner.unsafe(
+      `CREATE ROLE ${WORKER_LOGIN} LOGIN NOINHERIT IN ROLE p02_worker; GRANT CONNECT ON DATABASE ${DATABASE} TO ${WORKER_LOGIN}`,
     );
     return { socketDir: root, connect, stop };
   } catch (error) {
