@@ -1,6 +1,6 @@
 # personal-knowledge-workspace — cahier des charges de P04
 
-Maturité : proposition
+Maturité : décision
 
 Provenance : ce document reprend la spécification de mission
 `specs/personal-knowledge-workspace/cahier-des-charges.md` de l'analyse du 2026-10-14 (306 lignes,
