@@ -200,6 +200,40 @@ fn a_path_outside_the_vault_grammar_is_refused_before_any_io() {
     println!("paths refused: {} of {}", refused.len(), refused.len());
 }
 
+/// The grammar caps a path at 1 024 bytes below the root; the operating system
+/// caps the whole path, root included. macOS allows 1 024 bytes (Linux 4 096,
+/// which the grammar plus a temporary-directory root cannot reach: hence the
+/// platform guard). The system's own refusal of the name is `vault.invalid_path`,
+/// the same as a path outside the grammar, not an operating-system failure.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_path_within_the_grammar_that_exceeds_the_system_limit_is_an_invalid_path() {
+    let scratch = Scratch::new();
+    let vault = open(&scratch);
+    let path = format!(
+        "{}/{}/{}/{}.md",
+        "d".repeat(255),
+        "d".repeat(255),
+        "d".repeat(255),
+        "n".repeat(252)
+    );
+    assert_eq!(path.len(), 1023);
+    assert!(scratch.path().as_os_str().len() + 1 + path.len() > 1024);
+
+    assert_eq!(
+        vault.read_note(&path).map(|n| n.bytes),
+        Err(VaultError::InvalidPath)
+    );
+    assert_eq!(
+        vault.write_note(&path, b"x", None),
+        Err(VaultError::InvalidPath)
+    );
+    assert!(
+        common::listing(scratch.path()).is_empty(),
+        "a refused write created a file"
+    );
+}
+
 #[test]
 fn accented_and_astral_names_are_valid() {
     let scratch = Scratch::new();

@@ -5,20 +5,36 @@
 // `apps/desktop/package.json` and the sources of `apps/desktop/src/` and refuses
 // a dependency outside a closed list, an import that would give the front a
 // Markdown parser, a file system or an index, and a function of the same kind
-// written by hand outside `src/bridge/`. Every rule reports what it examined: a
+// written by hand outside `src/bridge/`, and dynamic code, network or web storage
+// named in any source. Every rule reports what it examined: a
 // front with no source to read is a failure, never a green.
 //
 // shortcut: the source is read lexically (comments stripped, strings kept), not
 // through a TypeScript AST; an obfuscated parser (a function renamed to
 // something innocent, a method named `parse`, an import assembled at run time)
-// is not seen. Upgrade
-// trigger: the editor package (WP-4) adds source the lexical rules cannot
-// judge; then read the AST with the compiler API.
+// is not seen. Dynamic code, network and web storage are refused by name
+// (`eval`, `Function(`, `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`,
+// `localStorage`, `sessionStorage`, `indexedDB`); a name assembled at run time
+// (`globalThis["fe" + "tch"]`), an alias of `Function` (`const F = Function`)
+// or a constructor reached through a prototype (`(() => {}).constructor(...)`)
+// is not seen, and what stops those at run time is the window, not this
+// checker: `script-src 'self'` without `unsafe-eval` and `connect-src` limited
+// to the IPC origins in `src-tauri/tauri.conf.json`. `incognito: true` keeps
+// web storage from outliving the session; it does not forbid it within one.
+// Upgrade trigger: the editor package (WP-4) adds source the lexical rules
+// cannot judge; then read the AST with the compiler API.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-export type Rule = "dependency" | "import" | "filesystem" | "native" | "parser" | "index";
+export type Rule =
+  | "dependency"
+  | "import"
+  | "filesystem"
+  | "native"
+  | "parser"
+  | "index"
+  | "runtime";
 
 export interface Refusal {
   readonly rule: Rule;
@@ -93,6 +109,23 @@ const FILESYSTEM_USE: ReadonlyArray<{ readonly pattern: RegExp; readonly what: s
   { pattern: /\bFileSystem(?:File|Directory)Handle\b/, what: "File System Access handle" },
   { pattern: /\bstorage\s*\.\s*getDirectory\s*\(/, what: "origin private file system" },
   { pattern: /\bprocess\s*\.\s*binding\b/, what: "process.binding" },
+];
+
+/**
+ * Dynamic code, network and web storage by name. The window already stops them
+ * at run time (`script-src 'self'` without `unsafe-eval`, `connect-src` limited
+ * to the IPC origins, `incognito: true`; `tauri.conf.json`), so a source that
+ * names one is dead code at best and a way to wrong the user's data at worst:
+ * the front holds no state and reaches nothing but the bridge. `eval` and the
+ * storage and network names are refused wherever they appear (an alias is as
+ * bad as a call); `Function` only called, since it is also a TypeScript type.
+ */
+const RUNTIME_USE: ReadonlyArray<{ readonly pattern: RegExp; readonly what: string }> = [
+  { pattern: /\beval\b/, what: "eval" },
+  { pattern: /\b(?:new\s+)?Function\s*\(/, what: "Function constructor" },
+  { pattern: /\bfetch\b/, what: "fetch" },
+  { pattern: /\b(?:XMLHttpRequest|WebSocket|EventSource)\b/, what: "network API" },
+  { pattern: /\b(?:localStorage|sessionStorage|indexedDB)\b/, what: "web storage" },
 ];
 
 /** Only `src/bridge/` may reach the native side; the rest of the front goes through it. */
@@ -261,6 +294,9 @@ export function checkFront(files: FrontFiles): FrontReport {
 
     for (const { pattern, what } of FILESYSTEM_USE) {
       if (pattern.test(code)) refusals.push({ rule: "filesystem", file: path, detail: what });
+    }
+    for (const { pattern, what } of RUNTIME_USE) {
+      if (pattern.test(code)) refusals.push({ rule: "runtime", file: path, detail: what });
     }
     if (!inBridge && NATIVE_USE.test(code)) {
       refusals.push({ rule: "native", file: path, detail: "native internals outside src/bridge/" });

@@ -80,8 +80,11 @@ fn create_temp(directory: &Path) -> io::Result<(File, TempFile)> {
 
 /// The revision check, run once the temporary file is complete and right
 /// before the rename, which leaves the narrowest window between the check and
-/// the replacement. A writer that is not this process can still slip in between
-/// the two; the vault has one writer, and EF-P04-6 owns the merge of the others.
+/// the replacement. Nothing here closes that window: the caller holds the write
+/// lock of its `Vault` across the check and the rename, which excludes every
+/// other writer of the same `Vault`. Another `Vault` on the same folder, another
+/// process or an editor can still slip in between the two; EF-P04-6 owns the
+/// merge of those.
 fn check_revision(target: &Path, expected: Option<&Revision>) -> Result<(), VaultError> {
     let current = match File::open(target) {
         Ok(file) => {
@@ -103,7 +106,9 @@ fn check_revision(target: &Path, expected: Option<&Revision>) -> Result<(), Vaul
 }
 
 /// Replaces `target` by `bytes`. `expected` is `None` to create the note (it
-/// must not exist) or the revision the caller read.
+/// must not exist) or the revision the caller read. Callers serialise their
+/// calls (see `Vault::write_lock`): the revision check and the rename are two
+/// steps, atomic only with respect to a writer that waits for this one.
 pub(crate) fn write_atomic(
     target: &Path,
     bytes: &[u8],

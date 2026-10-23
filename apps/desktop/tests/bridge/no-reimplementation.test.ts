@@ -175,6 +175,69 @@ const VECTORS: readonly Vector[] = [
     mutate: (f) =>
       addSource(f, "src/editor/x.ts", "const root = await navigator.storage.getDirectory();\n"),
   },
+  // dynamic code, network and storage, without an import
+  {
+    name: "a source calls eval",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", "const run = (s: string) => eval(s);\n"),
+  },
+  {
+    name: "a source reaches eval through an alias",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", "export const run = (0, eval);\n"),
+  },
+  {
+    name: "a source builds code with new Function",
+    rule: "runtime",
+    mutate: (f) =>
+      addSource(f, "src/editor/x.ts", 'export const run = new Function("a", "return a");\n'),
+  },
+  {
+    name: "a source calls Function without new",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", 'export const run = Function("return 1");\n'),
+  },
+  {
+    name: "a source calls fetch",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", 'await fetch("https://example.test/a");\n'),
+  },
+  {
+    name: "a source calls fetch through window",
+    rule: "runtime",
+    mutate: (f) =>
+      addSource(f, "src/editor/x.ts", 'await window.fetch("https://example.test/a");\n'),
+  },
+  {
+    name: "a source keeps a reference to fetch",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", "export const get = globalThis.fetch;\n"),
+  },
+  {
+    name: "a source opens an XMLHttpRequest",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", "const r = new XMLHttpRequest();\n"),
+  },
+  {
+    name: "a source opens a WebSocket",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", 'const s = new WebSocket("wss://x.test");\n'),
+  },
+  {
+    name: "a source writes localStorage",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", 'localStorage.setItem("note", text);\n'),
+  },
+  {
+    name: "a source writes sessionStorage",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", 'sessionStorage.setItem("note", text);\n'),
+  },
+  {
+    name: "a source opens IndexedDB",
+    rule: "runtime",
+    mutate: (f) => addSource(f, "src/editor/x.ts", 'indexedDB.open("notes");\n'),
+  },
   // hand-written parsers and indexes
   {
     name: "a Markdown parser is declared outside src/bridge",
@@ -256,7 +319,15 @@ describe("red vectors: each violation is refused by its rule and counted", () =>
   test("every rule has at least one vector", () => {
     const covered = new Set(VECTORS.map((vector) => vector.rule));
     console.log(`vectors: ${VECTORS.length} for ${covered.size} rules`);
-    const rules: Rule[] = ["dependency", "filesystem", "import", "index", "native", "parser"];
+    const rules: Rule[] = [
+      "dependency",
+      "filesystem",
+      "import",
+      "index",
+      "native",
+      "parser",
+      "runtime",
+    ];
     expect([...covered].sort()).toEqual(rules);
   });
 });
@@ -295,6 +366,23 @@ describe("controls: what the rules must let through", () => {
       '// import { marked } from "marked";\nexport const a = 1;\n',
     );
     expect(checkFront(files).refusals).toEqual([]);
+  });
+
+  test("names that only contain a runtime name are not runtime use", () => {
+    const files = mutableFront();
+    addSource(
+      files,
+      "src/editor/x.ts",
+      [
+        "export function evaluate(a: number) { return a; }",
+        "export const prefetchedNotes = [1];",
+        "export const refetch = () => evaluate(1);",
+        "export type Callback = Function;",
+        "// eval(x); fetch(y); localStorage.clear();",
+        "",
+      ].join("\n"),
+    );
+    expect(count("runtime", files)).toBe(0);
   });
 
   test("a variable that merely holds parsed data is not a parser", () => {

@@ -58,7 +58,19 @@ pub(crate) struct Index {
     postings: Vec<Vec<(u32, u32)>>,
     /// A rewritten note takes a new id at the end; its old slot becomes `None`.
     documents: Vec<Option<Document>>,
+    /// Keyed by the NFC form of the path (see `path_key`), not by the spelling.
     by_path: HashMap<String, u32>,
+}
+
+/// The key of a path in the index. APFS keeps the spelling a name was created
+/// with and compares names regardless of Unicode normalisation, so `café.md`
+/// written with a precomposed or a decomposed é is one file there; keyed by the
+/// raw string it would be two entries and the older one would outlive its text.
+/// The document keeps the spelling of the latest write, which the file system
+/// opens. A file system that tells the two spellings apart (Linux, NTFS) holds
+/// two files under one key: the entry is the one indexed last.
+fn path_key(path: &str) -> String {
+    path.nfc().collect()
 }
 
 /// Calls `emit` with each word of `text`: lowercase, without combining marks,
@@ -156,7 +168,8 @@ impl Index {
     /// UTF-8 are indexed through their lossy decoding: the replacement
     /// character separates words, the rest still answers searches.
     pub(crate) fn update(&mut self, path: &str, bytes: &[u8]) {
-        self.remove(path);
+        let key = path_key(path);
+        self.remove(&key);
         let Ok(id) = u32::try_from(self.documents.len()) else {
             return;
         };
@@ -182,7 +195,7 @@ impl Index {
             path: path.to_owned(),
             terms,
         }));
-        self.by_path.insert(path.to_owned(), id);
+        self.by_path.insert(key, id);
     }
 
     fn term_id(&mut self, word: String) -> u32 {
@@ -195,8 +208,9 @@ impl Index {
         id
     }
 
-    fn remove(&mut self, path: &str) {
-        let Some(id) = self.by_path.remove(path) else {
+    /// Removes the entry under `key`, a value of `path_key`.
+    fn remove(&mut self, key: &str) {
+        let Some(id) = self.by_path.remove(key) else {
             return;
         };
         let Some(document) = self.documents.get_mut(id as usize).and_then(Option::take) else {
@@ -276,3 +290,6 @@ impl Index {
         Ok(hits)
     }
 }
+
+#[cfg(test)]
+mod tests;

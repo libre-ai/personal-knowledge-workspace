@@ -4,7 +4,7 @@
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::atomic::{Faults, NoFaults, write_atomic};
 use crate::error::VaultError;
@@ -28,6 +28,17 @@ pub struct Note {
 #[derive(Debug)]
 pub struct Vault {
     root: PathBuf,
+    /// Held from the revision check to the index update of every write, so that
+    /// two writers of this vault cannot both pass the check against one file.
+    /// One lock for the whole vault rather than one per note: a per-note lock
+    /// is keyed by a string, and two strings can name one file (NFC and NFD on
+    /// APFS, `A.md` and `a.md` on a case-insensitive volume), which would let
+    /// both writers in.
+    ///
+    /// shortcut: writes to distinct notes queue behind one another (each is one
+    /// temporary file and two fsyncs); upgrade trigger: a measured delay on
+    /// parallel writes of distinct notes, then a lock keyed by file identity.
+    write_lock: Mutex<()>,
     /// Derived data (EF-P04-4): absent until `rebuild_index`, never persisted.
     index: RwLock<Option<Index>>,
 }
@@ -46,6 +57,7 @@ impl Vault {
         }
         Ok(Self {
             root,
+            write_lock: Mutex::new(()),
             index: RwLock::new(None),
         })
     }
@@ -91,13 +103,25 @@ impl Vault {
         if bytes.len() > MAX_NOTE_BYTES {
             return Err(VaultError::TooLarge);
         }
+        let _writing = self.writing();
         let full = self.resolve(path)?;
         write_atomic(&full, bytes, expected, faults)?;
-        // The rename took place: the index follows the file it derives from.
+        // The rename took place: the index follows the file it derives from,
+        // and the write lock keeps its updates in the order of the renames.
         if let Some(index) = self.index_write()?.as_mut() {
             index.update(path, bytes);
         }
         Ok(Revision::of(bytes))
+    }
+
+    /// The guard of the write lock. The lock protects an interval, not data: a
+    /// writer that panicked left a temporary file its `Drop` removes and no
+    /// state to distrust, so a poisoned lock is taken again rather than refused
+    /// for the rest of the session.
+    fn writing(&self) -> MutexGuard<'_, ()> {
+        self.write_lock
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Scans the folder and replaces the index by one built from it.

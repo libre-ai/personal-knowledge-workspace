@@ -16,7 +16,9 @@ mod common;
 
 use std::fs;
 use std::io;
-use std::sync::Mutex;
+use std::sync::{Mutex, mpsc};
+use std::thread;
+use std::time::Duration;
 
 use libre_ai_notebook_vault::{Faults, Revision, Vault, VaultError, WriteStep};
 
@@ -207,4 +209,84 @@ fn the_permissions_of_the_original_survive_the_rewrite() {
             0o640
         );
     }
+}
+
+/// Parks its writer at the rename, which is after the revision check, until
+/// released. Without a bound the test would hang on a writer nobody releases.
+struct ParkAtRename {
+    arrived: Mutex<mpsc::Sender<()>>,
+    release: Mutex<mpsc::Receiver<()>>,
+}
+
+impl Faults for ParkAtRename {
+    fn before(&self, step: WriteStep) -> io::Result<()> {
+        if step == WriteStep::Rename {
+            self.arrived.lock().unwrap().send(()).unwrap();
+            self.release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .map_err(io::Error::other)?;
+        }
+        Ok(())
+    }
+}
+
+/// Tells when its writer reaches the rename, and never fails.
+struct NotifyAtRename(Mutex<mpsc::Sender<()>>);
+
+impl Faults for NotifyAtRename {
+    fn before(&self, step: WriteStep) -> io::Result<()> {
+        if step == WriteStep::Rename {
+            self.0.lock().unwrap().send(()).unwrap();
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn two_writers_holding_the_same_revision_cannot_both_succeed() {
+    let (scratch, vault, revision) = vault_with_original();
+    let (arrived_tx, arrived_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let (second_tx, second_rx) = mpsc::channel();
+    let first = ParkAtRename {
+        arrived: Mutex::new(arrived_tx),
+        release: Mutex::new(release_rx),
+    };
+    let second = NotifyAtRename(Mutex::new(second_tx));
+
+    let (first_result, second_result, overlapped) = thread::scope(|scope| {
+        let first_writer = scope.spawn(|| {
+            vault.write_note_with("notes/a.md", b"first writer\n", Some(&revision), &first)
+        });
+        // The first writer has passed its revision check and waits to rename.
+        arrived_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        let second_writer = scope.spawn(|| {
+            vault.write_note_with("notes/a.md", b"second writer\n", Some(&revision), &second)
+        });
+        // A second writer that gets as far as its own rename while the first is
+        // parked has checked the same revision against the same file: the
+        // vault does not serialise them. Waiting is only the cost of the
+        // correct case, where it never gets there.
+        let overlapped = second_rx.recv_timeout(Duration::from_millis(500)).is_ok();
+        release_tx.send(()).unwrap();
+        (
+            first_writer.join().unwrap(),
+            second_writer.join().unwrap(),
+            overlapped,
+        )
+    });
+
+    assert_eq!(first_result, Ok(Revision::of(b"first writer\n")));
+    assert_eq!(second_result, Err(VaultError::RevisionConflict));
+    assert!(
+        !overlapped,
+        "the second writer reached its rename while the first was parked"
+    );
+    assert_eq!(
+        fs::read(scratch.path().join("notes/a.md")).unwrap(),
+        b"first writer\n"
+    );
+    assert_eq!(listing(scratch.path()).len(), 1, "temporary file left");
 }

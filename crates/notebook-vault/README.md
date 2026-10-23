@@ -23,8 +23,22 @@ path and no operating-system message is part of a refusal.
   made before the open, not at the open: someone able to swap a path for a
   link between the two already writes in the vault.
 - The revision check runs once the temporary file is complete, right before the
-  rename. A writer other than this process can still slip in between the two;
-  merging concurrent edits is EF-P04-6.
+  rename, and a lock held by the `Vault` from the check to the index update
+  makes the two one step for every writer of that `Vault`: of two writes holding
+  the same revision, the second gets `vault.revision_conflict`. The lock is
+  one for the whole vault, so writes to different notes queue. A writer other
+  than that `Vault` (another process, another `Vault` on the same folder, an
+  editor) can still slip in between the check and the rename; merging
+  concurrent edits is EF-P04-6.
+- A path inside the grammar can still exceed the operating system's limit once
+  the vault root is put in front of it (1 024 bytes in all on macOS). The
+  system refuses the name and the answer is `vault.invalid_path`, as for a path
+  outside the grammar.
+- The index is keyed by the NFC form of a path, so that the spellings of a name
+  that APFS treats as one file (`café.md` written with the precomposed é, or with
+  `e` and U+0301) are one entry.
+  On a file system that keeps them apart (Linux, NTFS), two notes whose names
+  differ only by that spelling share one entry, the one indexed last.
 - `fsync` is requested (`File::sync_all`, `F_FULLFSYNC` on macOS) and its
   position in the sequence is tested through the failure hook; that the disk
   really holds the bytes after a power loss is not something these tests measure.

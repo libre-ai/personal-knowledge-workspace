@@ -142,11 +142,13 @@ fn has_forbidden_character(value: &str) -> bool {
 /// A link or image destination: no markup character, no whitespace, and when it
 /// names a scheme (anything before the first `:` that precedes `/`, `?` or `#`)
 /// that scheme is `http`, `https` or `mailto`. A relative reference and an
-/// anchor have no scheme and pass.
+/// anchor have no scheme and pass; a protocol-relative one (`//host/path`) has
+/// none either but names a host and takes the scheme of the page, so it does not.
 fn safe_url(raw: &str) -> Option<String> {
     if raw.len() > MAX_ATTRIBUTE_BYTES
         || has_forbidden_character(raw)
         || raw.chars().any(char::is_whitespace)
+        || raw.starts_with("//")
     {
         return None;
     }

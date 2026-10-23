@@ -12,7 +12,8 @@ use std::io;
 pub enum VaultError {
     /// The folder to open is not an absolute path to a readable directory.
     InvalidVault,
-    /// The note path is outside the grammar of `path.rs`, or crosses a symbolic link.
+    /// The note path is outside the grammar of `path.rs`, crosses a symbolic
+    /// link, or is a name the operating system refuses (too long below this root).
     InvalidPath,
     NotFound,
     /// The expected revision is not the current one (or the note exists and none was expected).
@@ -72,6 +73,9 @@ impl From<io::Error> for VaultError {
     fn from(error: io::Error) -> Self {
         match error.kind() {
             io::ErrorKind::NotFound => Self::NotFound,
+            // The system's own refusal of a name: a path inside the grammar can
+            // exceed its limit once the vault root is put in front of it.
+            io::ErrorKind::InvalidFilename => Self::InvalidPath,
             kind => Self::Io(kind),
         }
     }

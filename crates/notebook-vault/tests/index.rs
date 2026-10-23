@@ -206,6 +206,34 @@ fn results_are_capped_and_ordered_deterministically() {
     );
 }
 
+/// APFS keeps the spelling a name was created with and compares names without
+/// regard to Unicode normalisation: `café.md` (NFC) and `cafe\u{301}.md` (NFD)
+/// are one file. Only that file system makes the two spellings one note, hence
+/// the platform guard; `the_index_key_ignores_the_unicode_spelling_of_a_path`,
+/// in `src/index.rs`, holds the same rule on every platform.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_rewrite_under_the_other_unicode_spelling_of_a_name_leaves_one_entry() {
+    let scratch = Scratch::new();
+    let vault = Vault::open(scratch.path()).unwrap();
+    vault.rebuild_index().unwrap();
+    let first = vault
+        .write_note("caf\u{e9}.md", b"alpha original\n", None)
+        .unwrap();
+    // The second spelling is the same file: the expected revision is the first's.
+    vault
+        .write_note("cafe\u{301}.md", b"beta rewritten\n", Some(&first))
+        .unwrap();
+
+    assert_eq!(fs::read_dir(scratch.path()).unwrap().count(), 1);
+    assert!(
+        vault.search("alpha").unwrap().is_empty(),
+        "the replaced text is still searchable: a stale entry"
+    );
+    assert_eq!(vault.search("beta").unwrap().len(), 1);
+    assert_eq!(vault.rebuild_index().unwrap().notes, 1);
+}
+
 #[cfg(unix)]
 #[test]
 fn a_symbolic_link_is_ignored_by_the_index_and_counted() {

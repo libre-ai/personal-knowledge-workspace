@@ -148,6 +148,7 @@ fn link_destinations_are_a_whitelist() {
         "http://ok.example",
         "mailto:a@ok.example",
         "relative/path.md",
+        "/root/relative.md",
         "#anchor",
     ] {
         let node = link(ok);
@@ -166,6 +167,9 @@ fn link_destinations_are_a_whitelist() {
         "tauri://localhost/",
         "ipc://x",
         "%6Aavascript:alert(1)",
+        // A protocol-relative reference names a host and inherits the scheme of the page.
+        "//evil.example/x",
+        "//evil.example",
     ] {
         let node = link(blocked);
         assert_eq!(node["kind"], "link", "{blocked}");
