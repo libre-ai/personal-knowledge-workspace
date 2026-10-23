@@ -1,4 +1,9 @@
 {
   "schemaVersion": "announced-scripts.v1",
-  "scripts": []
+  "scripts": [
+    { "cwd": ".", "script": "check:p04-shell", "workPackage": "WP-2" },
+    { "cwd": ".", "script": "check:p04-bridge", "workPackage": "WP-3" },
+    { "cwd": ".", "script": "check:p04-editor", "workPackage": "WP-4" },
+    { "cwd": "apps/desktop", "script": "test:e2e", "workPackage": "WP-2" }
+  ]
 }
