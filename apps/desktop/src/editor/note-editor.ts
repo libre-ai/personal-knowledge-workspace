@@ -5,12 +5,15 @@
 // A CodeMirror 6 editor on one note of the vault (EF-P04-10): the note is read
 // and written through the bridge, the live preview comes from `render_preview`,
 // and the only extensions are those of `typed-text.ts`. The text of the buffer
-// is what the user typed and nothing else (CA-41).
+// is what the user typed and nothing else (CA-41). The whole text of the note is
+// in the accessibility tree, not only the lines on screen (`accessible-text.ts`,
+// CA-49).
 
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 import type { Bridge } from "../bridge";
+import { accessibleText } from "./accessible-text";
 import { NoteSession, type SessionOptions } from "./note-session";
 import { livePreview } from "./preview";
 import { adoptEditorStyles } from "./styles";
@@ -60,6 +63,7 @@ export async function openNote(
       extensions: [
         typedTextOnly(),
         livePreview(bridge, options.previewDelayMs),
+        accessibleText(),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) session.edit(update.state.doc.toString());
         }),
