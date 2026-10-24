@@ -7,6 +7,12 @@
   "engines": {
     "bun": ">=1.4.0"
   },
+  "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "@tauri-apps/api": "2.12.4"
+  },
   "scripts": {
     "check:bun": "bun ../../node_modules/@libre-ai/governance/tools/quality/check-bun-minimum.ts",
     "prebuild": "bun run check:bun",
