@@ -21,7 +21,7 @@ use libre_ai_notebook_vault::{Revision, Vault, VaultError};
 use common::{Scratch, byte_traps, one_mebibyte};
 
 fn open(scratch: &Scratch) -> Vault {
-    Vault::open(scratch.path()).unwrap()
+    scratch.open().unwrap()
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn a_symbolic_link_is_never_followed() {
     fs::create_dir(&vault_root).unwrap();
     symlink(outside.path().join("secret.md"), vault_root.join("link.md")).unwrap();
     symlink(outside.path().join("dir"), vault_root.join("linked-dir")).unwrap();
-    let vault = Vault::open(&vault_root).unwrap();
+    let vault = Vault::open_with(&vault_root, &scratch.policy()).unwrap();
 
     for path in ["link.md", "linked-dir/new.md"] {
         assert_eq!(
@@ -287,16 +287,17 @@ fn a_symbolic_link_is_never_followed() {
 fn opening_something_that_is_not_a_directory_is_refused() {
     let scratch = Scratch::new();
     fs::write(scratch.path().join("file.md"), b"x").unwrap();
+    let policy = scratch.policy();
     assert_eq!(
-        Vault::open(&scratch.path().join("file.md")).err(),
+        Vault::open_with(&scratch.path().join("file.md"), &policy).err(),
         Some(VaultError::InvalidVault)
     );
     assert_eq!(
-        Vault::open(&scratch.path().join("absent")).err(),
+        Vault::open_with(&scratch.path().join("absent"), &policy).err(),
         Some(VaultError::InvalidVault)
     );
     assert_eq!(
-        Vault::open(std::path::Path::new("relative/dir")).err(),
+        Vault::open_with(std::path::Path::new("relative/dir"), &policy).err(),
         Some(VaultError::InvalidVault)
     );
 }

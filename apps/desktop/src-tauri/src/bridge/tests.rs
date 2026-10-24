@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use libre_ai_notebook_vault::{Revision, VaultError};
+use libre_ai_notebook_vault::{Revision, RootPolicy, SYSTEM_DIRS, VaultError};
 use serde_json::{Value, json};
 use tauri::http::{HeaderMap, HeaderName, HeaderValue};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
@@ -30,30 +30,53 @@ use tauri::test::{INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder};
 use tauri::webview::InvokeRequest;
 use tauri::{Listener, WebviewWindow, WebviewWindowBuilder};
 
-use super::{BRIDGE_CODES, BridgeError, PATH_HEADER, REVISION_HEADER, VAULT_CHANGED, decode_path};
-use crate::{context, with_commands};
+use super::{
+    BRIDGE_CODES, BridgeError, PATH_HEADER, REVISION_HEADER, VAULT_CHANGED, VaultState, decode_path,
+};
+use crate::{context, with_vault_state};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
-struct Scratch(PathBuf);
+/// A vault inside a stand-in home folder, removed on drop. The home folder is
+/// the one the guard on roots judges against: no test reads the `$HOME` of
+/// whoever runs it.
+struct Scratch {
+    base: PathBuf,
+    home: PathBuf,
+    vault: PathBuf,
+}
 
 impl Scratch {
     fn new() -> Self {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let path = std::env::temp_dir().join(format!("bridge-test-{}-{n}", std::process::id()));
-        fs::create_dir_all(&path).unwrap();
+        let base = std::env::temp_dir().join(format!("bridge-test-{}-{n}", std::process::id()));
+        let home = base.join("home");
+        let vault = home.join("vault");
+        fs::create_dir_all(&vault).unwrap();
         // The vault resolves its root; use the resolved form so paths compare equal.
-        Self(fs::canonicalize(path).unwrap())
+        Self {
+            base,
+            home: fs::canonicalize(home).unwrap(),
+            vault: fs::canonicalize(vault).unwrap(),
+        }
     }
 
     fn text(&self) -> String {
-        self.0.to_str().unwrap().to_owned()
+        self.vault.to_str().unwrap().to_owned()
+    }
+
+    /// The policy of the stand-in home folder, without system directories: the
+    /// stand-in lives in the temporary directory of the machine, which is a
+    /// system directory by the very list under test. The system directories
+    /// are exercised by `bridge_open_vault_refuses_the_system_directories`.
+    fn state(&self) -> VaultState {
+        VaultState::with_policy(Some(RootPolicy::new(&self.home, &[]).unwrap()))
     }
 }
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        let _ = fs::remove_dir_all(&self.base);
     }
 }
 
@@ -62,8 +85,21 @@ struct Shell {
     main: WebviewWindow<MockRuntime>,
 }
 
+/// A shell whose bridge judges roots against the home folder of the process.
+/// For the tests that open no vault.
 fn shell() -> Shell {
-    let app = with_commands(mock_builder()).build(context()).unwrap();
+    shell_with(VaultState::default())
+}
+
+/// A shell whose bridge judges roots against the stand-in home folder of `scratch`.
+fn shell_in(scratch: &Scratch) -> Shell {
+    shell_with(scratch.state())
+}
+
+fn shell_with(state: VaultState) -> Shell {
+    let app = with_vault_state(mock_builder(), state)
+        .build(context())
+        .unwrap();
     let main = WebviewWindowBuilder::new(&app, "main", Default::default())
         .build()
         .unwrap();
@@ -160,7 +196,7 @@ fn closed_codes() -> Vec<&'static str> {
 #[test]
 fn bridge_every_command_answers_with_its_declared_type() {
     let scratch = Scratch::new();
-    let shell = shell();
+    let shell = shell_in(&scratch);
     let window = &shell.main;
     let mut answered = 0;
 
@@ -232,7 +268,7 @@ fn bridge_every_command_answers_with_its_declared_type() {
 #[test]
 fn bridge_read_note_returns_the_exact_bytes_of_every_trap() {
     let scratch = Scratch::new();
-    let shell = shell();
+    let shell = shell_in(&scratch);
     json_call(&shell.main, "open_vault", json!({ "path": scratch.text() })).unwrap();
     let traps: Vec<(&str, Vec<u8>)> = vec![
         ("crlf", b"a\r\nb\r\n".to_vec()),
@@ -263,7 +299,7 @@ fn bridge_read_note_returns_the_exact_bytes_of_every_trap() {
         );
         assert_eq!(&frame[Revision::LEN..], bytes.as_slice(), "{name}");
         assert_eq!(
-            fs::read(scratch.0.join(format!("traps/{name}.md"))).unwrap(),
+            fs::read(scratch.vault.join(format!("traps/{name}.md"))).unwrap(),
             *bytes,
             "{name}"
         );
@@ -277,7 +313,7 @@ fn bridge_read_note_returns_the_exact_bytes_of_every_trap() {
 #[test]
 fn bridge_a_rewrite_with_the_revision_that_was_read_replaces_the_note() {
     let scratch = Scratch::new();
-    let shell = shell();
+    let shell = shell_in(&scratch);
     let window = &shell.main;
     json_call(window, "open_vault", json!({ "path": scratch.text() })).unwrap();
     write(window, "a.md", None, b"one\r\n").unwrap();
@@ -290,18 +326,18 @@ fn bridge_a_rewrite_with_the_revision_that_was_read_replaces_the_note() {
         .unwrap()
         .json();
     assert_eq!(written["revision"], Revision::of(b"two\r\n").as_str());
-    assert_eq!(fs::read(scratch.0.join("a.md")).unwrap(), b"two\r\n");
+    assert_eq!(fs::read(scratch.vault.join("a.md")).unwrap(), b"two\r\n");
 
     // The revision read before is now stale: a second writer holding it is refused.
     let stale = write(window, "a.md", Some(&read), b"three\r\n").unwrap_err();
     assert_eq!(stale, json!("vault.revision_conflict"));
-    assert_eq!(fs::read(scratch.0.join("a.md")).unwrap(), b"two\r\n");
+    assert_eq!(fs::read(scratch.vault.join("a.md")).unwrap(), b"two\r\n");
 }
 
 #[test]
 fn bridge_a_one_mebibyte_note_crosses_the_ipc_as_raw_bytes() {
     let scratch = Scratch::new();
-    let shell = shell();
+    let shell = shell_in(&scratch);
     json_call(&shell.main, "open_vault", json!({ "path": scratch.text() })).unwrap();
     let body: Vec<u8> = (0..1_048_576u32)
         .map(|n| (n.wrapping_mul(2_654_435_761) >> 24) as u8)
@@ -317,7 +353,7 @@ fn bridge_a_one_mebibyte_note_crosses_the_ipc_as_raw_bytes() {
 #[test]
 fn bridge_every_refusal_is_a_closed_vault_code() {
     let scratch = Scratch::new();
-    let shell = shell();
+    let shell = shell_in(&scratch);
     let window = &shell.main;
     let closed = closed_codes();
     let mut refusals = 0;
@@ -359,7 +395,7 @@ fn bridge_every_refusal_is_a_closed_vault_code() {
         json_call(
             window,
             "open_vault",
-            json!({ "path": scratch.0.join("absent").to_str().unwrap() }),
+            json!({ "path": scratch.vault.join("absent").to_str().unwrap() }),
         ),
         "vault.invalid_vault",
         "absent",
@@ -498,7 +534,7 @@ fn bridge_every_refusal_is_a_closed_vault_code() {
     );
 
     assert_eq!(
-        fs::read(scratch.0.join("a.md")).unwrap(),
+        fs::read(scratch.vault.join("a.md")).unwrap(),
         b"one",
         "a refusal changed a note"
     );
@@ -509,7 +545,7 @@ fn bridge_every_refusal_is_a_closed_vault_code() {
 #[test]
 fn bridge_a_refusal_never_carries_a_path_or_free_text() {
     let scratch = Scratch::new();
-    let shell = shell();
+    let shell = shell_in(&scratch);
     json_call(&shell.main, "open_vault", json!({ "path": scratch.text() })).unwrap();
     let secret = "private-folder-name-9f3a";
     let error = json_call(
@@ -580,7 +616,7 @@ fn bridge_only_the_declared_commands_and_the_declared_window_are_served() {
 #[test]
 fn bridge_a_successful_write_emits_vault_changed_with_the_path_and_revision() {
     let scratch = Scratch::new();
-    let shell = shell();
+    let shell = shell_in(&scratch);
     json_call(&shell.main, "open_vault", json!({ "path": scratch.text() })).unwrap();
     let (sender, receiver) = mpsc::channel();
     shell.app.listen(VAULT_CHANGED, move |event| {
@@ -680,4 +716,111 @@ fn bridge_error_codes_are_serialised_as_their_code_and_nothing_else() {
         assert!(error.code().starts_with("vault."));
     }
     assert_eq!(closed_codes().len(), 12);
+}
+
+/// The refusal of `open_vault` for `path`, which must be the closed code of an
+/// invalid vault and leave no vault open.
+fn assert_open_refused(shell: &Shell, path: &str, what: &str) {
+    let outcome = json_call(&shell.main, "open_vault", json!({ "path": path }));
+    assert_eq!(
+        outcome.err(),
+        Some(json!("vault.invalid_vault")),
+        "{what}: {path}"
+    );
+    let after = json_call(&shell.main, "read_note", json!({ "path": "a.md" }));
+    assert_eq!(
+        after.err(),
+        Some(json!("vault.not_open")),
+        "{what}: a refused open left a vault open"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bridge_open_vault_refuses_the_roots_the_guard_names() {
+    use std::os::unix::fs::symlink;
+
+    let scratch = Scratch::new();
+    let home = &scratch.home;
+    fs::create_dir_all(home.join(".ssh")).unwrap();
+    fs::create_dir_all(home.join("Library/Application Support")).unwrap();
+    fs::create_dir_all(scratch.base.join("elsewhere")).unwrap();
+    symlink("/", home.join("link-to-root")).unwrap();
+    symlink("/etc", home.join("link-to-etc")).unwrap();
+    let text = |path: PathBuf| path.to_str().unwrap().to_owned();
+    let hostile = [
+        ("the disk root", "/".to_owned()),
+        ("/private/etc", "/private/etc".to_owned()),
+        ("a link to the disk root", text(home.join("link-to-root"))),
+        ("a link to /etc", text(home.join("link-to-etc"))),
+        ("the home folder itself", text(home.clone())),
+        ("~/.ssh", text(home.join(".ssh"))),
+        ("~/Library", text(home.join("Library"))),
+        (
+            "~/Library/Application Support",
+            text(home.join("Library/Application Support")),
+        ),
+        (
+            "a path with ..",
+            text(home.join("vault").join("..").join(".ssh")),
+        ),
+        (
+            "a path with .. entered outside the home folder",
+            text(scratch.base.join("elsewhere/../home/vault")),
+        ),
+        ("a folder that does not exist", text(home.join("absent"))),
+    ];
+    for (what, path) in &hostile {
+        // A shell per root: the check that no vault was left open starts clean.
+        assert_open_refused(&shell_in(&scratch), path, what);
+    }
+    println!(
+        "bridge: {} hostile roots refused by open_vault",
+        hostile.len()
+    );
+
+    // The legitimate root stays open through the same command.
+    let shell = shell_in(&scratch);
+    assert_eq!(
+        json_call(&shell.main, "open_vault", json!({ "path": scratch.text() }))
+            .unwrap()
+            .json(),
+        Value::Null
+    );
+}
+
+#[test]
+fn bridge_open_vault_refuses_the_system_directories() {
+    // A home folder that is the disk root contains every system directory, so
+    // only the system-directory rule can refuse them.
+    let state = VaultState::with_policy(Some(
+        RootPolicy::new(std::path::Path::new("/"), &SYSTEM_DIRS).unwrap(),
+    ));
+    let shell = shell_with(state);
+    let mut refused = 0;
+    for directory in SYSTEM_DIRS {
+        if !std::path::Path::new(directory).is_dir() {
+            continue;
+        }
+        assert_open_refused(&shell, directory, "a system directory");
+        refused += 1;
+    }
+    assert!(refused >= 6, "only {refused} system directories exist here");
+    println!("bridge: {refused} system directories refused by open_vault");
+}
+
+#[test]
+fn bridge_without_a_home_folder_every_root_is_refused() {
+    let scratch = Scratch::new();
+    let shell = shell_with(VaultState::with_policy(None));
+    assert_open_refused(&shell, &scratch.text(), "no home folder to judge against");
+}
+
+#[test]
+fn bridge_the_state_of_the_application_judges_against_the_home_folder_of_the_process() {
+    let shell = shell();
+    assert_open_refused(&shell, "/", "the disk root");
+    if let Some(home) = std::env::home_dir() {
+        assert_open_refused(&shell, home.to_str().unwrap(), "the home folder itself");
+    }
 }

@@ -16,6 +16,7 @@ mod index;
 mod path;
 mod preview;
 mod revision;
+mod root;
 mod vault;
 
 pub use atomic::{Faults, NoFaults, WriteStep};
@@ -23,4 +24,5 @@ pub use error::VaultError;
 pub use index::{IndexStats, MAX_SEARCH_RESULTS, SearchHit};
 pub use preview::{MAX_PREVIEW_DEPTH, MAX_PREVIEW_NODES, NodeKind, PreviewNode, render_preview};
 pub use revision::Revision;
+pub use root::{HOME_FORBIDDEN_DIRS, RootPolicy, SYSTEM_DIRS};
 pub use vault::{MAX_NOTE_BYTES, Note, Vault};

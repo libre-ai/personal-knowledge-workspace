@@ -10,7 +10,9 @@ use std::io;
 /// requirements specification, section 6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultError {
-    /// The folder to open is not an absolute path to a readable directory.
+    /// The folder to open is not an absolute path to a readable directory, or
+    /// the guard on roots refuses it (`root.rs`). One code for both: a refusal
+    /// of the guard must not tell the front which folders exist outside its reach.
     InvalidVault,
     /// The note path is outside the grammar of `path.rs`, crosses a symbolic
     /// link, or is a name the operating system refuses (too long below this root).

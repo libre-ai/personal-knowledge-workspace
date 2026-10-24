@@ -9,7 +9,7 @@
 //!
 //! | command | request | response |
 //! | --- | --- | --- |
-//! | `open_vault` | JSON `{ path }` (absolute folder) | `null` |
+//! | `open_vault` | JSON `{ path }` (absolute folder below the home folder, see [`VaultState`]) | `null` |
 //! | `read_note` | JSON `{ path }` | raw: 64 ASCII hex digits (revision), then the exact bytes of the file |
 //! | `write_note` | raw body = the exact bytes; header `x-vault-path` (percent-encoded UTF-8), optional header `x-vault-revision` | JSON `{ path, revision }` |
 //! | `render_preview` | raw body = the Markdown, UTF-8 | JSON attribute tree (`PreviewNode`) |
@@ -25,7 +25,7 @@
 use std::sync::{Arc, Mutex};
 
 use libre_ai_notebook_vault::{
-    IndexStats, PreviewNode, Revision, SearchHit, Vault, VaultError,
+    IndexStats, PreviewNode, Revision, RootPolicy, SearchHit, Vault, VaultError,
     render_preview as render_markdown,
 };
 use serde::de::DeserializeOwned;
@@ -76,17 +76,44 @@ impl Serialize for BridgeError {
 }
 
 /// The vault the front opened, if any. One at a time: opening replaces it.
-#[derive(Default)]
-pub struct VaultState(Mutex<Option<Arc<Vault>>>);
+///
+/// It holds the guard on the roots `open_vault` accepts, built on the Rust side
+/// from the home folder of the process. No command receives the home folder or
+/// the policy from the front. The guard is a rail, not a boundary: it leaves
+/// open every folder below the home folder, so a compromised front can still
+/// name `~/Documents`. The boundary is CA-47 (WP-4): the front stops naming the
+/// root, and a native folder picker, on this side, does.
+pub struct VaultState {
+    vault: Mutex<Option<Arc<Vault>>>,
+    /// `None` when the home folder of the process cannot be determined: the
+    /// guard has nothing to judge against and `open_vault` refuses every root.
+    policy: Option<RootPolicy>,
+}
+
+impl Default for VaultState {
+    fn default() -> Self {
+        Self::with_policy(RootPolicy::current_user().ok())
+    }
+}
 
 impl VaultState {
+    /// A state judging roots against `policy`. The application uses the
+    /// default (the user's home folder); this is how the tests give the guard a
+    /// home folder of their own.
+    pub fn with_policy(policy: Option<RootPolicy>) -> Self {
+        Self {
+            vault: Mutex::new(None),
+            policy,
+        }
+    }
+
     fn current(&self) -> Result<Arc<Vault>, BridgeError> {
-        let guard = self.0.lock().map_err(|_| other_io())?;
+        let guard = self.vault.lock().map_err(|_| other_io())?;
         guard.clone().ok_or(BridgeError::NotOpen)
     }
 
     fn replace(&self, vault: Vault) -> Result<(), BridgeError> {
-        *self.0.lock().map_err(|_| other_io())? = Some(Arc::new(vault));
+        *self.vault.lock().map_err(|_| other_io())? = Some(Arc::new(vault));
         Ok(())
     }
 }
@@ -193,7 +220,13 @@ pub async fn open_vault(
     request: Request<'_>,
 ) -> Result<(), BridgeError> {
     let PathArgs { path } = json_args(&request)?;
-    let vault = blocking(move || Vault::open(std::path::Path::new(&path))).await?;
+    // The blocking task outlives the borrow of `state`: it owns a copy of the policy.
+    let guarded = state.policy.clone();
+    let vault = blocking(move || {
+        let policy = guarded.as_ref().ok_or(VaultError::InvalidVault)?;
+        Vault::open_with(std::path::Path::new(&path), policy)
+    })
+    .await?;
     state.replace(vault)
 }
 

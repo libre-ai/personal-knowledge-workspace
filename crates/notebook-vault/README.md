@@ -16,6 +16,34 @@ may not.
 Every refusal is one of the closed `vault.*` codes of `VaultError::CODES`; no
 path and no operating-system message is part of a refusal.
 
+## The guard on the root: a guard rail, not a boundary
+
+`Vault::open` (and `open_vault`, which calls it) refuses a root that is the
+root of the disk, a system directory (`SYSTEM_DIRS`: `/System`, `/Library`,
+`/usr`, `/bin`, `/sbin`, `/etc`, `/var`, `/private`, `/dev`, `/Applications`,
+`/Volumes`, their canonical forms and a few more), the home folder itself, not
+strictly below the home folder, with a component that starts with a dot
+(`~/.ssh`), or `~/Library` and below (`HOME_FORBIDDEN_DIRS`). The rules apply
+to the root as entered and as resolved, so a link of the home folder to `/etc`
+is refused; a `..` in the entered root is refused outright. The home folder is
+read on the Rust side by the standard library, never taken from the front, and
+a refusal is `vault.invalid_vault`, the code of a folder that does not exist,
+so that the front learns nothing about folders outside its reach.
+
+**What it does not do.** Every folder below the home folder is still open to a
+front that names it, `~/Documents` included: a compromised front can read and
+write every `*.md` there. The guard removes the cheapest abuse (`/`, `$HOME`,
+`~/.ssh`), it does not confine the front. The boundary is CA-47 of
+`docs/cahier-des-charges.md` (WP-4): no command of the bridge receives a root
+from the front any more, a native folder picker on the Rust side chooses it.
+The system-directory list is that of macOS (the shell is macOS only, ADR-0057);
+a second platform adds its own.
+
+The tests build their own home folder (`RootPolicy::new`) and never read the
+`$HOME` of whoever runs them. `RootPolicy::new` and `Vault::open_with` are for
+Rust callers: the bridge builds its policy from the process and no command
+carries one.
+
 ## Limits stated, not hidden
 
 - Note paths are `/`-separated, relative, `.md` (lowercase), without a

@@ -43,10 +43,18 @@ pub fn context<R: Runtime>() -> Context<R> {
 }
 
 /// Registers the commands of the shell, those listed in `build.rs`, and the
-/// state of the vault bridge.
+/// state of the vault bridge, which judges roots against the home folder of
+/// the user.
 pub fn with_commands<R: Runtime>(builder: Builder<R>) -> Builder<R> {
+    with_vault_state(builder, bridge::VaultState::default())
+}
+
+/// [`with_commands`] with a given state of the vault bridge. The tests use it
+/// to give the guard on roots a home folder of their own; the front cannot
+/// reach it, it is not a command.
+pub fn with_vault_state<R: Runtime>(builder: Builder<R>, state: bridge::VaultState) -> Builder<R> {
     builder
-        .manage(bridge::VaultState::default())
+        .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::shell_ping,
             bridge::open_vault,

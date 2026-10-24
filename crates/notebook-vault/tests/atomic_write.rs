@@ -66,7 +66,7 @@ impl Faults for Recorder {
 
 fn vault_with_original() -> (Scratch, Vault, Revision) {
     let scratch = Scratch::new();
-    let vault = Vault::open(scratch.path()).unwrap();
+    let vault = scratch.open().unwrap();
     let revision = vault.write_note("notes/a.md", ORIGINAL, None).unwrap();
     (scratch, vault, revision)
 }
@@ -121,7 +121,7 @@ fn an_interrupted_write_leaves_the_original_intact_and_no_temporary_file() {
 #[test]
 fn an_interrupted_first_write_creates_nothing() {
     let scratch = Scratch::new();
-    let vault = Vault::open(scratch.path()).unwrap();
+    let vault = scratch.open().unwrap();
     let faults = FailAt::new(WriteStep::SyncTemp, 1);
     let result = vault.write_note_with("fresh.md", b"x", None, &faults);
     assert_eq!(result, Err(VaultError::Io(io::ErrorKind::Other)));

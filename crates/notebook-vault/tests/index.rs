@@ -30,7 +30,7 @@ fn vault_with(notes: &[(&str, &str)]) -> (Scratch, Vault) {
         fs::create_dir_all(full.parent().unwrap()).unwrap();
         fs::write(full, text).unwrap();
     }
-    let vault = Vault::open(scratch.path()).unwrap();
+    let vault = scratch.open().unwrap();
     (scratch, vault)
 }
 
@@ -147,7 +147,7 @@ fn the_index_is_derived_from_the_folder_alone() {
     vault.write_note("s/c.md", b"beta delta\n", None).unwrap();
     let before = vault.search("beta").unwrap();
 
-    let reopened = Vault::open(scratch.path()).unwrap();
+    let reopened = scratch.open().unwrap();
     assert_eq!(reopened.search("beta"), Err(VaultError::IndexMissing));
     reopened.rebuild_index().unwrap();
     assert_eq!(reopened.search("beta").unwrap(), before);
@@ -215,7 +215,7 @@ fn results_are_capped_and_ordered_deterministically() {
 #[test]
 fn a_rewrite_under_the_other_unicode_spelling_of_a_name_leaves_one_entry() {
     let scratch = Scratch::new();
-    let vault = Vault::open(scratch.path()).unwrap();
+    let vault = scratch.open().unwrap();
     vault.rebuild_index().unwrap();
     let first = vault
         .write_note("caf\u{e9}.md", b"alpha original\n", None)

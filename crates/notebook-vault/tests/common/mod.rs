@@ -16,29 +16,59 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use libre_ai_notebook_vault::{RootPolicy, Vault, VaultError};
+
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
-/// A scratch directory removed on drop. The name carries the process id and a
-/// counter, so two tests of one run never share a directory.
-pub struct Scratch(PathBuf);
+/// A scratch vault inside a scratch home folder, both removed on drop. The
+/// name carries the process id and a counter, so two tests of one run never
+/// share a directory. The home folder is a stand-in: the tests never depend on
+/// the home folder of whoever runs them.
+pub struct Scratch {
+    base: PathBuf,
+    home: PathBuf,
+    vault: PathBuf,
+}
 
 impl Scratch {
     pub fn new() -> Self {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let path =
+        let base =
             std::env::temp_dir().join(format!("notebook-vault-test-{}-{n}", std::process::id()));
-        fs::create_dir_all(&path).unwrap();
-        Self(path)
+        let home = base.join("home");
+        let vault = home.join("vault");
+        fs::create_dir_all(&vault).unwrap();
+        Self { base, home, vault }
     }
 
+    /// The folder to open as a vault.
     pub fn path(&self) -> &Path {
-        &self.0
+        &self.vault
+    }
+
+    /// The stand-in home folder, the parent of [`Scratch::path`].
+    pub fn home(&self) -> &Path {
+        &self.home
+    }
+
+    /// The policy of this home folder. It has no system directory: the scratch
+    /// lives in the temporary directory of the machine, which is `/private/var`
+    /// on macOS, a system directory by the very list under test. The rule on
+    /// system directories is exercised by `root_guard.rs`, against a home folder
+    /// that contains them.
+    pub fn policy(&self) -> RootPolicy {
+        RootPolicy::new(&self.home, &[]).unwrap()
+    }
+
+    /// The vault of this scratch, opened for the stand-in user.
+    pub fn open(&self) -> Result<Vault, VaultError> {
+        Vault::open_with(&self.vault, &self.policy())
     }
 }
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        let _ = fs::remove_dir_all(&self.base);
     }
 }
 

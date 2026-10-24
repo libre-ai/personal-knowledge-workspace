@@ -11,6 +11,7 @@ use crate::error::VaultError;
 use crate::index::{Index, IndexStats, SearchHit};
 use crate::path::components;
 use crate::revision::Revision;
+use crate::root::RootPolicy;
 
 /// Largest note the vault reads, writes, previews or indexes: 16 MiB. The
 /// largest note of the qualification corpus is 1 MiB (CA-34); the limit keeps a
@@ -44,14 +45,27 @@ pub struct Vault {
 }
 
 impl Vault {
-    /// Opens `directory`, which must be an absolute path to a directory. The
-    /// root is resolved once (symbolic links included) and every later path is
-    /// resolved below it.
+    /// Opens `directory` for the user running the process: [`Vault::open_with`]
+    /// against [`RootPolicy::current_user`].
     pub fn open(directory: &Path) -> Result<Self, VaultError> {
+        Self::open_with(directory, &RootPolicy::current_user()?)
+    }
+
+    /// Opens `directory`, which must be an absolute path to a directory the
+    /// `policy` admits: a guard rail, not a boundary (see [`RootPolicy`] and
+    /// CA-47). The root is resolved once (symbolic links included) and every
+    /// later path is resolved below it.
+    pub fn open_with(directory: &Path, policy: &RootPolicy) -> Result<Self, VaultError> {
         if !directory.is_absolute() {
             return Err(VaultError::InvalidVault);
         }
+        policy
+            .check_entered(directory)
+            .map_err(|_| VaultError::InvalidVault)?;
         let root = fs::canonicalize(directory).map_err(|_| VaultError::InvalidVault)?;
+        policy
+            .check_canonical(&root)
+            .map_err(|_| VaultError::InvalidVault)?;
         if !root.is_dir() {
             return Err(VaultError::InvalidVault);
         }
