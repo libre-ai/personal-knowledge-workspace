@@ -186,14 +186,19 @@ son budget. Le rappel qui porte la borne est fixé par mesure :
   l'événement clavier, hors de tout rappel `requestAnimationFrame` (inféré du cheminement de la
   saisie dans WebKit, non mesuré) ; s'il y entrait pendant un rappel, la borne aurait une mise à
   jour de retard, et l'écart consigné ci-dessous la montrerait de l'ordre d'une période de trame.
-- **NFR-03** : l'éditeur, son élément de contenu et le premier dessin de la zone visible naissent
-  dans une même tâche (`openNote`, `apps/desktop/src/editor/note-editor.ts`), qu'aucun observateur
-  posé sur `.cm-content` ne peut voir. Le script demande donc un rappel `requestAnimationFrame` dès
-  la borne de début, puis un nouveau rappel depuis chaque rappel tant que l'état de fin du § 10.3
-  n'est pas atteint ; il évalue cet état après la lecture de l'horodatage, et la borne est
-  l'horodatage du premier rappel où il est atteint. Quand l'éditeur dessine la zone dans l'un de
-  ses propres rappels de la même mise à jour, exécuté après celui du script, l'état n'est vu qu'au
-  rappel suivant : la borne a alors une période de trame de retard, biais vers le haut (sévère).
+- **NFR-03** : la racine de l'éditeur, son point de montage et son élément de contenu naissent dans
+  une même tâche synchrone (`openNote`, `apps/desktop/src/editor/note-editor.ts`, lu au dépôt), qu'aucun
+  observateur posé sur `.cm-content` ne peut voir ; que le premier dessin de la zone visible ait lieu
+  dans cette même tâche est inféré du constructeur de CodeMirror, non mesuré. Le script demande donc
+  un rappel `requestAnimationFrame` dès la borne de début, puis un nouveau rappel depuis chaque
+  rappel tant que l'état de fin du § 10.3 n'est pas atteint ; il évalue cet état après la lecture de
+  l'horodatage, et la borne est l'horodatage du premier rappel où il est atteint. Cette boucle a
+  deux effets, tous deux vers le haut (sévères) : elle cale le rendu sur les trames, de sorte qu'un
+  état atteint entre deux trames attend la suivante (de 0 à une période de trame, inféré du même
+  régime qu'au paragraphe ci-dessous) ; et quand l'éditeur dessine la zone dans l'un de ses propres
+  rappels de la même mise à jour, exécuté après celui du script, l'état n'est vu qu'au rappel
+  suivant (une période de trame). Le biais total va de 0 à deux périodes de trame ; le nombre de
+  rappels et la période de trame consignés ci-dessous permettent de le lire.
 
 Le rapport consigne, par configuration d'AT-02, l'écart entre l'observation du changement et la
 borne de fin (nombre, p50, p95, maximum), ce qui distingue cette borne de toute autre ; pour
@@ -408,8 +413,12 @@ pour l'une des causes de cet ensemble fermé :
 Trois rejets ou interruptions consécutifs de même cause arrêtent la série : elle est consignée
 avec cette cause, sans verdict. `shell-exited` y est nommé défaut du produit mesuré, pas de la
 machine. La série ne reprend qu'après correction de la machine, de l'instrument ou du produit, sur
-une copie neuve du corpus ; un produit corrigé est un autre binaire mesuré, dont l'empreinte est
-consignée au manifeste.
+une copie neuve du corpus. Après une correction de la machine seule (une application fermée, un
+réglage rétabli), le binaire et l'instrument sont les mêmes et la série se poursuit, les
+échantillons déjà valides restant acquis. Un instrument corrigé change la procédure de mesure, et un
+produit corrigé est un autre binaire mesuré, dont l'empreinte est consignée au manifeste : dans
+les deux cas la série repart de zéro, chaque effectif du § 2 complet sous le seul instrument et sur
+le seul binaire de la reprise, et aucun échantillon d'avant n'entre dans ses verdicts.
 
 ### 10.8 Contrôle de gel
 
