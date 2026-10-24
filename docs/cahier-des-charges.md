@@ -11,7 +11,7 @@ P04 est la coquille Tauri 2 et l'éditeur CodeMirror 6 d'ADR-0057 ; treize crit�
 pour le jalon ouvert par ADR-0057. Les critères de la mission conservés gardent leur numéro, soit
 les critères CA-1 à CA-17, CA-31 et CA-32 ; les numéros de la mission qui portaient P02, soit les
 numéros de CA-18 à CA-30 et le numéro CA-33, ne sont pas réutilisés, pour que chaque numéro
-désigne la même chose ici et dans la mission ; les critères ajoutés vont de CA-34 à CA-47.
+désigne la même chose ici et dans la mission ; les critères ajoutés vont de CA-34 à CA-49.
 Réécritures de forme exigées par la norme des
 paquets de travail de `libre-ai/project-governance` (`docs/specifications/WORK-PACKAGES.md`) :
 chaque paramètre écrit entre chevrons dans la mission est écrit en capitales (`SHA`, `ORG/DEPOT`,
@@ -355,7 +355,7 @@ Chaque critère porte un préfixe d'état au SHA lu : `[état : vert]` = test ou
 statique ; `[état : à construire]` = code, corpus ou instrument absent du SHA ; `[état : partiel]`
 = une partie du critère est à construire. Décompte :
 `grep -cE '^- CA-[0-9]+ \[état : à construire\]' docs/cahier-des-charges.md`, et de même pour
-`rouge`, `vert`, `partiel`. Les critères CA-34 à CA-47 sont ceux du jalon ouvert par ADR-0057 et
+`rouge`, `vert`, `partiel`. Les critères CA-34 à CA-49 sont ceux du jalon ouvert par ADR-0057 et
 sont découpés en paquets de travail dans `prd.md` § 10.
 
 Transverses au dépôt :
@@ -593,6 +593,35 @@ P04, jalon ADR-0057 — qualification macOS et fiche (paquet WP-6) :
   vue rouge (substitution par une version qui l'accepte) ; les vecteurs du garde-fou de WP-3
   (racine du disque, répertoires système, chemin hors du dossier personnel, dossier caché) sont
   conservés.
+
+P04, jalon ADR-0057 — harnais de la série et arbre d'accessibilité (paquets WP-7 et WP-8, décisions
+du propriétaire du 2026-10-24, avant la série du paquet WP-5) :
+
+- CA-48 [état : à construire] **Le harnais de la série existe et ne mesure rien** (paquet WP-7). Un
+  binaire de série sous `apps/desktop/src-tauri/examples/`, bâti sur la bibliothèque de la coquille
+  avec le front embarqué de `apps/desktop/dist`, n'ajoute à la coquille qu'un sélecteur de racine
+  injecté et un script d'instrumentation ; les programmes de `tools/qualification/p04-tauri/series/`
+  pilotent AT-01, AT-02, NFR-03, NFR-10 et la lecture d'accessibilité selon `PROTOCOL.md` et écrivent
+  `reports/ID/manifest.json` avec les sorties brutes ; `check-report.ts` lit ce manifeste (commit,
+  machine, SHA-256 du corpus égal à celui de `PROTOCOL.md`, sorties brutes présentes, verdict par
+  seuil, dernier commit de `PROTOCOL.md` antérieur à l'ajout du rapport), sort 1 sur un seuil rouge
+  et 2 sur un manifeste incomplet, et imprime le nombre de seuils examinés. Le même paquet écrit dans
+  `project.v1.yaml` le plafond de mémoire résidente 500 Mio et les `kill_predicates` exigés par le
+  critère CA-46, avant toute mesure. Il ne commite aucun rapport. Validation :
+  `bun test tools/qualification/p04-tauri` (manifestes de fixture vert, rouge et incomplet vus sortir
+  0, 1 et 2 ; vecteur rouge : un seuil retiré d'un manifeste vert vu sortir non nul) ;
+  `cargo clippy --locked -p libre-ai-p04-desktop --examples -- -D warnings` sort 0 ;
+  `grep -c '500 Mio' project.v1.yaml` ≥ 1 ;
+  `git ls-tree -r --name-only HEAD tools/qualification/p04-tauri/reports` → 0 ligne.
+- CA-49 [état : à construire] **L'éditeur expose tout le texte de la note à l'accessibilité**
+  (EF-P04-11, `ADR-0057:66` ; paquet WP-8). Pour la note ouverte, le front expose à l'accessibilité
+  la totalité de son texte, lignes hors de la zone visible comprises, que l'éditeur ne rend pas, sans
+  modifier les octets enregistrés (AT-01). Validation : `bun run check:p04-editor` vert, dont un test
+  WebKit qui lit l'arbre d'accessibilité de l'éditeur sur la note de 1 Mio du corpus CR-10k et compare
+  son texte au fichier, caractère à caractère à la même position (proportion 100 %) ; vecteur rouge :
+  l'éditeur sans ce code, qui n'expose que son libellé (`apps/desktop/src/editor/typed-text.ts:71`),
+  vu rouge. La mesure par l'API d'accessibilité macOS dans la coquille construite reste celle de CA-44
+  (paquet WP-5).
 
 ## 9. Critères d'abandon
 
