@@ -44,7 +44,7 @@ versionnées (I-13, I-15).
 | Contrats consommés | monde WIT `libre-ai:notebook-core@2.0.0` ; `p02-job-v1` vendorisé (référence P02) | `vendored/wit/notebook-core-v2/world.wit:1` ; `vendored/contracts/p02-job-v1/provenance.json` |
 | Patch vendorisé | `third_party/rustcrypto-aes-0.8.4` (sélection `fixslice64` sur wasm32, SHA-256 déclaré) appliqué à tout le graphe | `Cargo.toml:73-77` ; `crates/notebook-core/DEPENDENCIES.md:31-36` |
 | Qualification | harnais `tools/qualification/notebook-core-v2/` (34 fichiers), classes matérielles, toolchain Node 26.5.0 et Playwright 1.61.1 épinglés par SHA-256 ; aucun harnais de mesure de l'éditeur | `toolchains/notebook-qualification.json` ; `toolchains/notebook-resource-classes.json` |
-| CI | 2 workflows verts le 2026-10-14 (`Code validation`, `Notebook WebKit macOS`) ; composition de flotte épinglée `0db2e10e` ; aucun workflow macOS pour une coquille | `.github/workflows/code-validation.yml:13` ; `.github/workflows/notebook-webkit-macos.yml` |
+| CI | 2 workflows verts le 2026-10-14 (`Code validation`, `Notebook WebKit macOS`) ; composition de flotte épinglée à la génération de `code-validation.yml:13` (résolue par `grep`, jamais recopiée ici) ; aucun workflow macOS pour une coquille | `.github/workflows/code-validation.yml:13` ; `.github/workflows/notebook-webkit-macos.yml` |
 | Licence | EUPL-1.2 déclarée (`package.json:4`, `Cargo.toml:17`) ; REUSE : EUPL-1.2 `**`, CC-BY-4.0 `*.md` et `docs/`, Apache-2.0 `vendored/contracts/**`, `LicenseRef-ThirdParty-Notices` pour le patch aes ; conforme à I-11 | `REUSE.toml:8-65` |
 
 ### 1.2 Contradictions document / code au SHA
@@ -634,7 +634,7 @@ numéro AB-1 de la mission (part P02) n'est pas réutilisé.
 
 Internes (libre-ai) :
 
-- `project-governance` : workflow `validate-composition.yml@0db2e10e` (`code-validation.yml:13`),
+- `project-governance` : workflow `validate-composition.yml` à la génération de `code-validation.yml:13`,
   outillage `@libre-ai/governance` (gates `check-bun-*`, `check-toolchain`, `check-secret-scan`,
   `check-personal-data-boundary`, `check-no-transmission`), `toolchains/bun.json`,
   `toolchains/notebook-qualification.json` ; norme `docs/specifications/WORK-PACKAGES.md` ; fiche
