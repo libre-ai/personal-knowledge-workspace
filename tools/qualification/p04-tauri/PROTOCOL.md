@@ -44,8 +44,9 @@ Les champs de ce tableau sont lus par `protocol.test.ts` ; la colonne « Champ �
 | `nfr-10-sample-period-ms` | 100 |
 | `nfr-10-hold-ms` | 5000 |
 | `save-timeout-ms` | 10000 |
+| `at-01-key-gap-ms` | 20 |
 
-Les sept dernières lignes sont des paramètres de procédure du § 10, ajoutés avant la première
+Les huit dernières lignes sont des paramètres de procédure du § 10, ajoutés avant la première
 mesure ; ce ne sont ni des seuils ni des effectifs.
 
 ## 2. Effectifs
@@ -172,6 +173,16 @@ celle où le changement a été rendu. C'est une borne haute de la peinture obse
 page ; la composition par le processus GPU de WebKit n'est pas observée. AT-02 et NFR-03 emploient
 la même définition.
 
+Résolution des horloges, relevé du 2026-10-24 dans la WKWebView du binaire de série (Mac16,6,
+macOS 26.6.2, page non isolée, `crossOriginIsolated` faux) : `performance.now()` et
+`Event.timeStamp` avancent par pas de 1 ms au moins (200 000 lectures consécutives de chacun, pas
+minimal entre valeurs distinctes : 1 ms). Une latence, différence de deux lectures, est donc un
+nombre entier de millisecondes, à 1 ms près de la valeur vraie. Conséquence pour les seuils : le
+verdict se prend sur la valeur mesurée (comparaison inclusive, § 3). Contre 16 ms, un échantillon
+mesuré 16 ms est conforme alors que sa valeur vraie peut approcher 17 ms ; un échantillon mesuré
+17 ms est rouge alors que sa valeur vraie peut dépasser 16 ms de très peu. La résolution ne permet
+pas de trancher à mieux que 1 ms ; elle est consignée dans le rapport.
+
 ### 10.2 AT-02, de la frappe système au caractère peint
 
 Décision du propriétaire du 2026-10-24 : « Caractère tapé peint », de la frappe système au
@@ -195,7 +206,8 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   1 Mio, `cr10k.ts`) est ouverte, puis le curseur est placé par le script d'instrumentation, par
   une sélection de l'éditeur et non par une frappe, à la fin de la ligne de numéro `ceil(L / 2)`
   (comptée à partir de 1), `L` étant le nombre de lignes de la note dans l'éditeur. Les 3 000
-  frappes de la configuration sont faites dans ce lancement.
+  frappes de la configuration sont faites dans ce lancement. Aucun `rebuild_index` n'est appelé
+  pour AT-02 (ni pour AT-01, NFR-03 et l'accessibilité) : seul le scénario de NFR-10 l'appelle.
 - **Aperçu actif** : l'extension d'aperçu en direct est montée avec son délai livré,
   `preview-delay-ms` du § 1 (`apps/desktop/src/editor/preview.ts:44`) ; elle recalcule en arrière-plan
   pendant la série. Une frappe est postée `at-02-pause-ms` après l'instant peint de la précédente,
@@ -214,8 +226,12 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
 - **Borne de début** : `performance.now()` juste avant que le script d'instrumentation soumette le
   formulaire d'ouverture de la note (`#open-form`, `requestSubmit()`).
 - **Borne de fin** : l'instant peint (§ 10.1) du premier état où l'éditeur est monté et où la zone
-  visible contient le texte de la note (au moins une ligne rendue, dont le texte est celui de la
-  première ligne de la note). C'est le rendu de la zone visible d'abord admis par le § 3.
+  visible est rendue. La zone visible est la boîte du défileur de l'éditeur (`.cm-scroller`). Elle
+  est rendue quand les éléments de ligne de l'éditeur (`.cm-line`) dont la boîte coupe cette zone
+  sont, dans l'ordre, les lignes 1 à `k` de la note (`k` au moins 1), chacun portant le texte de la
+  ligne de même rang de la note, et quand le bas de la ligne `k` atteint le bas de la zone, ou que
+  `k` est la dernière ligne de la note. La note est ouverte en haut (ligne 1 en tête). C'est le rendu
+  de la zone visible d'abord admis par le § 3 ; le reste de la note n'est pas attendu.
 - **Aperçu actif** : l'extension d'aperçu est montée à l'ouverture ; ses marques, calculées après
   `preview-delay-ms`, ne sont pas attendues par la borne de fin (même lecture que la décision
   « Caractère tapé peint » pour AT-02 : l'aperçu travaille en arrière-plan).
@@ -223,17 +239,27 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
 
 ### 10.4 NFR-10, mémoire résidente
 
-- **Métrique** : la somme, sur les processus comptés, de la taille résidente (RSS) que rend
-  `ps -o pid=,rss= -p <pid>,<pid>,...`, en kibioctets, convertie en Mio. Chaque processus compte ses
+- **Métrique** : la somme, sur les processus comptés, de la taille résidente (RSS) que rend un même
+  relevé `ps -A -o pid=,rss=,comm=`, en kibioctets, convertie en Mio. Chaque processus compte ses
   pages partagées (bibliothèques du système) : la somme majore la mémoire propre de l'application.
 - **Processus comptés** : le processus de la coquille et les trois processus auxiliaires de WebKit
   qu'il fait naître, `com.apple.WebKit.WebContent`, `com.apple.WebKit.GPU` et
-  `com.apple.WebKit.Networking`, fils de `launchd` et non de la coquille. Ils sont attribués par
-  différence : les processus `com.apple.WebKit.*` présents après le lancement et absents juste
-  avant (`ps -A -o pid=,comm=`). Si la différence ne compte pas exactement un processus de chacun des
-  trois noms, le lancement n'est pas un échantillon : il est consigné et refait (§ 10.7).
-- **Période** : un relevé toutes les `nfr-10-sample-period-ms` (§ 1), du lancement du processus à
-  sa sortie.
+  `com.apple.WebKit.Networking`, fils de `launchd` et non de la coquille. Le nom d'un processus est
+  le dernier composant du chemin de son exécutable tel que le rend `ps -A -o pid=,comm=` : sous
+  macOS, `comm` rend le chemin complet, sans troncature (relevé du 2026-10-24, macOS 26.6.2 :
+  `/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU`,
+  et de même pour `WebContent` et `Networking`). `ucomm` est tronqué à 16 caractères
+  (`com.apple.WebKit` pour les trois) et n'est pas employé. Les processus sont attribués par
+  différence : ceux de ces trois noms présents pendant le lancement et absents du relevé d'avant.
+  Le relevé d'avant est la dernière opération qui précède la création du processus de la
+  coquille : il suit les lectures de rejet (§ 10.7) et la sortie du processus du lancement
+  précédent. Si la différence ne compte pas exactement un processus de chacun des trois noms, le
+  lancement n'est pas un échantillon : il est consigné et refait (§ 10.7).
+- **Période** : les relevés sont lancés aux échéances `t0 + n × nfr-10-sample-period-ms` (§ 1),
+  `t0` étant la création du processus, jusqu'à sa sortie ; un relevé commence à son échéance et
+  non à la fin du précédent. Une échéance déjà passée quand le relevé précédent se termine est
+  sautée et comptée ; le rapport consigne, par lancement, le nombre de relevés, le nombre
+  d'échéances sautées et la durée médiane d'un relevé.
 - **Scénario d'un lancement** : lancement, choix du dossier par le sélecteur injecté, appel de
   `rebuild_index` par le script d'instrumentation (l'index n'existe qu'après lui), ouverture de la
   note de 1 Mio, attente de la première application des marques de l'aperçu, tenue de
@@ -248,8 +274,9 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   référence par `oracle.ts`. Un premier lancement fait l'aller-retour sans édition des 10 000
   fichiers, par ordre de chemin, puis sort ; l'instantané est comparé à la référence
   (`compareSnapshots`). Un second lancement, sur la même copie, édite un paragraphe de chaque fichier
-  éditable, par ordre de chemin, puis sort ; chaque fichier est alors comparé à ses octets d'avant.
-  La passe suivante repart d'une copie neuve.
+  éditable, par ordre de chemin, puis sort ; chaque fichier est alors comparé à ses octets d'avant
+  ce second lancement. Une passe donne les comptes des deux lignes d'AT-01 ; elle n'est menée à
+  terme que si ses deux lancements le sont (§ 5). La passe suivante repart d'une copie neuve.
 - **Ouverture et fermeture** : une note est ouverte par la soumission du formulaire d'ouverture avec
   son chemin. Elle est fermée quand la note suivante est ouverte à sa place (l'application détruit
   l'éditeur, ce qui écrit ce qui reste à écrire), et la dernière note d'un lancement par la sortie
@@ -269,7 +296,7 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
 - **Édition** : le curseur est placé par le script d'instrumentation, par une sélection de
   l'éditeur, à la fin du paragraphe (octet de fin de la plage, converti en position de l'éditeur),
   puis le texte `at-01-edit-text` du § 1 est tapé par des frappes système (§ 10.2), une frappe par
-  caractère.
+  caractère, une frappe postée `at-01-key-gap-ms` (§ 1) après la précédente.
 - **Comptes** : le rapport imprime, par passe, le nombre de fichiers examinés, d'identiques, de
   modifiés, de manquants et d'ajoutés à l'aller-retour, et le nombre d'éditions examinées. Une
   édition est examinée quand le fichier diffère de ses octets d'avant ; elle est conforme quand
@@ -305,7 +332,16 @@ Avant et après chaque lancement, puis à chaque relevé de NFR-10, le harnais l
 
 Un lancement pendant lequel l'une des deux lectures est vraie est rejeté et refait (§ 5) ; de même
 un lancement dont les processus de NFR-10 ne s'attribuent pas (§ 10.4). Le rapport consigne, par
-cause, le nombre de lancements rejetés.
+cause, le nombre de lancements rejetés ; les causes forment un ensemble fermé :
+`session-locked`, `display-asleep`, `helpers-unattributed`.
+
+La fenêtre doit rester visible : WebKit suspend `requestAnimationFrame` dans une fenêtre masquée
+(relevé du 2026-10-24 : pendant que la fenêtre était derrière une autre application au premier
+plan, la page est passée en `visibilityState` `hidden` et l'instrumentation n'a plus reçu aucune
+trame). Ces interruptions sont consignées à part des lancements rejetés. Une passe, une configuration
+ou un lancement pendant lequel la page passe en `hidden`, ou pendant lequel la coquille n'est pas
+l'application au premier plan au moment d'une frappe système, est interrompu, consigné avec sa
+cause et refait ; ce n'est pas un échantillon.
 
 ### 10.8 Contrôle de gel
 
@@ -315,4 +351,11 @@ commit qui ajoute un fichier sous `tools/qualification/p04-tauri/reports/`
 (`git log --diff-filter=A --format=%H -- tools/qualification/p04-tauri/reports`, dernière ligne).
 Le gel tient quand `P` diffère de `R` et que `git merge-base --is-ancestor P R` sort 0. Un
 historique tronqué (`git rev-parse --is-shallow-repository` rend `true`) ne permet pas ce contrôle :
-il échoue, il ne passe pas. `check-report.ts` (paquet WP-7) l'applique.
+il échoue, il ne passe pas.
+
+Le gel lie aussi chaque rapport au texte mesuré. Le harnais consigne dans le manifeste le SHA-256
+des octets de ce fichier lus au moment de la mesure (`protocolSha256`). Le vérificateur lit ce
+fichier au commit `P` (`git show P:tools/qualification/p04-tauri/PROTOCOL.md`), jamais dans l'arbre
+de travail ; il en tire les seuils, les effectifs et les paramètres qu'il applique, et refuse le
+rapport si le SHA-256 de ce contenu diffère de `protocolSha256`. `check-report.ts` (paquet WP-7)
+applique ces contrôles.
