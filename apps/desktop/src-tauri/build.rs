@@ -33,7 +33,7 @@ const REFUSED_ENV: &[&str] = &["TAURI_CONFIG"];
 /// fails on any drift between the two.
 const COMMANDS: &[&str] = &[
     "shell_ping",
-    "open_vault",
+    "choose_vault",
     "read_note",
     "write_note",
     "render_preview",

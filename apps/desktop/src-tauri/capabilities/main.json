@@ -5,7 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "allow-shell-ping",
-    "allow-open-vault",
+    "allow-choose-vault",
     "allow-read-note",
     "allow-write-note",
     "allow-render-preview",

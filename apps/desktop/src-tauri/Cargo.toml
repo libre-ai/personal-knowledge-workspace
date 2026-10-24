@@ -39,6 +39,11 @@ serde_json.workspace = true
 tauri.workspace = true
 thiserror.workspace = true
 
+# The shell is a macOS application (ADR-0057): the native picker of the vault root
+# exists there; elsewhere the picker offers nothing and `choose_vault` refuses.
+[target.'cfg(target_os = "macos")'.dependencies]
+rfd.workspace = true
+
 [dev-dependencies]
 tauri = { workspace = true, features = ["test"] }
 

@@ -77,6 +77,13 @@ url = "=2.5.8"
 # bridge), the X11 and D-Bus Linux backends and the Windows common controls.
 tauri = { version = "=2.12.4", default-features = false, features = ["wry", "compression"] }
 tauri-build = { version = "=2.7.3", default-features = false, features = ["config-json"] }
+# Native folder picker of the vault root (CA-47), called from Rust only: the
+# front gets no dialog right and no plugin is registered. 0.17.2 was published
+# on 2026-01-12 (MIT), read on crates.io on 2026-10-24; 0.16.1 of 2026-10-22 is
+# too young. `default-features = false` drops the Linux backends (the portal
+# and Wayland stacks): the shell is a macOS application and the picker exists
+# there only.
+rfd = { version = "=0.17.2", default-features = false }
 
 # P04 vault core (notebook-vault, EF-P04-9). Exact versions, each published at
 # least three days before adoption (measured on crates.io on 2026-10-24:

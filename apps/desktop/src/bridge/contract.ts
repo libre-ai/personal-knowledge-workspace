@@ -7,7 +7,7 @@
 // both sides, so a name changed on one side and not the other turns a test red.
 
 export const BRIDGE_COMMANDS = [
-  "open_vault",
+  "choose_vault",
   "read_note",
   "write_note",
   "render_preview",
@@ -40,6 +40,7 @@ export const REFUSAL_CODES = [
   "vault.io",
   "vault.not_open",
   "vault.invalid_request",
+  "vault.already_open",
 ] as const;
 
 export type RefusalCode = (typeof REFUSAL_CODES)[number];
