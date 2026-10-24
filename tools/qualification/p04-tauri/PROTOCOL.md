@@ -98,7 +98,7 @@ l'échantillon de rang `ceil(0.95 × N)` (rang compté à partir de 1). Pour 3 0
   lancements rejetés et leur cause sont consignés dans le rapport, et l'effectif de 60 est
   complété par des lancements valides.
 - Précisions de ce protocole, hors texte de CA-36 : aucune autre valeur n'est écartée (une valeur
-  aberrante lente reste dans l'échantillon) ; une passe AT-01 interrompue par une erreur n'est pas
+  aberrante lente reste dans l'échantillon) ; une passe AT-01 interrompue (causes du § 10.7) n'est pas
   comptée, elle est consignée et refaite, jusqu'à 20 passes menées à terme.
 
 ## 6. Machine de mesure
@@ -170,30 +170,43 @@ plan pendant toute mesure. Le dossier ouvert est une copie neuve du corpus CR-10
 ### 10.1 Instant peint
 
 L'instant où un changement de l'éditeur est peint est l'horodatage `performance.now()` lu en
-première instruction du premier rappel `requestAnimationFrame` que le script d'instrumentation
-demande dès qu'il observe le changement dans le DOM de l'éditeur, par un `MutationObserver` posé sur
-l'élément de contenu de l'éditeur (`.cm-content`). C'est le début de la mise à jour de rendu qui
-peint le changement : WebKit exécute les rappels `requestAnimationFrame` d'une mise à jour avant
-son style, sa mise en page et sa peinture. C'est une borne basse de la peinture observable depuis
-la page, à une condition : que le changement soit fait hors d'un rappel `requestAnimationFrame`
-(gestionnaire de clavier, soumission de formulaire), donc avant le début de la mise à jour qui le
-peint. Un changement observé pendant un rappel `requestAnimationFrame` est peint par la mise à jour
-en cours, et la borne aurait une mise à jour de retard : le script note pour chaque échantillon si
-l'observation a eu lieu pendant un rappel, et un tel échantillon est une erreur d'instrument
-(§ 10.7). L'écart entre la borne et la peinture est la durée du style, de la mise en page et de la
-peinture de cette mise à jour, puis de sa composition par le processus GPU de WebKit : il n'est pas
-observé, et il n'est inférieur à une période de trame que si la mise à jour tient dans son budget.
-AT-02 et NFR-03 emploient la même définition.
+première instruction, avant tout contrôle du script, d'un rappel `requestAnimationFrame` : c'est le
+début de la mise à jour de rendu qui peint le changement, WebKit exécutant les rappels
+`requestAnimationFrame` d'une mise à jour avant son style, sa mise en page et sa peinture. C'est une
+borne basse de la peinture observable depuis la page quand le changement est fait avant le début de
+cette mise à jour. L'écart entre la borne et la peinture est la durée du style, de la mise en page
+et de la peinture de cette mise à jour, puis de sa composition par le processus GPU de WebKit : il
+n'est pas observé, et il n'est inférieur à une période de trame que si la mise à jour tient dans
+son budget. Le rappel qui porte la borne est fixé par mesure :
 
-Le rapport consigne, par configuration d'AT-02 et pour les lancements de NFR-03, l'écart entre
-l'observation du changement et la borne de fin (nombre, p50, p95, maximum), ce qui distingue cette
-borne de toute autre. La période de trame est relevée au début de chaque lancement d'AT-02 et de
-NFR-03, avant toute frappe et avant l'ouverture mesurée : 600 intervalles entre rappels
-`requestAnimationFrame` successifs, dont le nombre, le p50, le p95 et le maximum sont consignés.
-Hors de ce relevé, le script ne demande aucun rappel `requestAnimationFrame` en dehors de ceux de la
-borne de fin : le relevé qui a fondé cette définition a été fait page au repos, et une boucle de
-rappels continue cale le rendu sur les trames, de sorte qu'un changement attendrait la trame
-suivante (inféré, non mesuré).
+- **AT-02** : le premier rappel que le script d'instrumentation demande dès qu'il observe le
+  changement, par un `MutationObserver` posé sur l'élément de contenu de l'éditeur (`.cm-content`),
+  qui existe alors (la note est ouverte avant la première frappe), avec les options `childList`,
+  `subtree` et `characterData` vraies. Le caractère tapé entre dans le DOM pendant la tâche de
+  l'événement clavier, hors de tout rappel `requestAnimationFrame` (inféré du cheminement de la
+  saisie dans WebKit, non mesuré) ; s'il y entrait pendant un rappel, la borne aurait une mise à
+  jour de retard, et l'écart consigné ci-dessous la montrerait de l'ordre d'une période de trame.
+- **NFR-03** : l'éditeur, son élément de contenu et le premier dessin de la zone visible naissent
+  dans une même tâche (`openNote`, `apps/desktop/src/editor/note-editor.ts`), qu'aucun observateur
+  posé sur `.cm-content` ne peut voir. Le script demande donc un rappel `requestAnimationFrame` dès
+  la borne de début, puis un nouveau rappel depuis chaque rappel tant que l'état de fin du § 10.3
+  n'est pas atteint ; il évalue cet état après la lecture de l'horodatage, et la borne est
+  l'horodatage du premier rappel où il est atteint. Quand l'éditeur dessine la zone dans l'un de
+  ses propres rappels de la même mise à jour, exécuté après celui du script, l'état n'est vu qu'au
+  rappel suivant : la borne a alors une période de trame de retard, biais vers le haut (sévère).
+
+Le rapport consigne, par configuration d'AT-02, l'écart entre l'observation du changement et la
+borne de fin (nombre, p50, p95, maximum), ce qui distingue cette borne de toute autre ; pour
+chaque lancement de NFR-03, le nombre de rappels demandés jusqu'à la borne. La période de trame est
+relevée au début de chaque lancement d'AT-02 et de NFR-03, avant toute frappe et avant l'ouverture
+mesurée : 600 intervalles entre rappels `requestAnimationFrame` successifs, dont le nombre, le
+p50, le p95 et le maximum sont consignés. Pendant les frappes d'AT-02, le script ne demande aucun
+rappel `requestAnimationFrame` en dehors de ceux de la borne de fin : le relevé qui a fondé cette
+définition a été fait page au repos, et une boucle de rappels continue cale le rendu sur les
+trames, de sorte qu'un changement attendrait la trame suivante (inféré, non mesuré). Cette règle ne
+lie que le script : les rappels propres de l'application (mesure de CodeMirror, aperçu) font partie
+de ce qui est mesuré, et l'écart consigné par configuration montre le régime dans lequel la série
+a eu lieu.
 
 Décision du propriétaire du 2026-10-24, avant toute mesure : « Premier rAF ». La définition
 précédente, le rappel demandé depuis ce premier rappel (début de la trame suivante), ajoutait au
@@ -381,16 +394,22 @@ pour l'une des causes de cet ensemble fermé :
 
 - `page-hidden` : `document.visibilityState` vaut `hidden`, lu par le script d'instrumentation à
   chaque échantillon et à chaque événement `visibilitychange` ;
+- `shell-exited` : le processus de la coquille sort avant la fin prévue de la passe, de la
+  configuration ou du lancement (sortie du processus fils observée par le harnais) ; cette lecture
+  précède celle du premier plan, de sorte qu'une coquille morte n'est jamais lue
+  `shell-not-frontmost` ;
 - `shell-not-frontmost` : au moment d'une frappe système, l'application au premier plan n'est pas
   la coquille, lu par le harnais juste avant chaque `CGEventPost` comme
   `NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier` différent du pid de la
   coquille ;
-- `instrument-error` : une différence négative (§ 10.2) ou un changement observé pendant un rappel
-  `requestAnimationFrame` (§ 10.1).
+- `instrument-error` : une différence négative (§ 10.2), ou une erreur du harnais ou du script
+  d'instrumentation lui-même (exception, relevé illisible), consignée avec son message.
 
 Trois rejets ou interruptions consécutifs de même cause arrêtent la série : elle est consignée
-avec cette cause, sans verdict, et ne reprend qu'après correction de la machine ou de l'instrument,
-sur une copie neuve du corpus.
+avec cette cause, sans verdict. `shell-exited` y est nommé défaut du produit mesuré, pas de la
+machine. La série ne reprend qu'après correction de la machine, de l'instrument ou du produit, sur
+une copie neuve du corpus ; un produit corrigé est un autre binaire mesuré, dont l'empreinte est
+consignée au manifeste.
 
 ### 10.8 Contrôle de gel
 
