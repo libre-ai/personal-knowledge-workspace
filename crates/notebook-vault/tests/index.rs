@@ -234,6 +234,56 @@ fn a_rewrite_under_the_other_unicode_spelling_of_a_name_leaves_one_entry() {
     assert_eq!(vault.rebuild_index().unwrap().notes, 1);
 }
 
+/// A Mac volume ignores case by default, but can be formatted to keep it. The
+/// test probes the volume of the scratch folder and asserts the rule of the
+/// volume it finds, so it neither skips nor passes on the wrong one:
+/// - case-insensitive: `Case.md` and `case.md` are one file, one entry;
+/// - case-sensitive: two files share one entry, the one indexed last (the
+///   stated limit of the index key, `README.md` of the crate), a rebuild
+///   included.
+///
+/// `the_index_key_ignores_the_case_of_a_path`, in `src/index/tests.rs`, holds
+/// the key rule on every platform.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_rewrite_under_another_case_of_a_name_follows_the_case_rule_of_the_volume() {
+    let scratch = Scratch::new();
+    fs::write(scratch.path().join("Probe.md"), b"probe").unwrap();
+    let case_insensitive = scratch.path().join("probe.md").exists();
+    fs::remove_file(scratch.path().join("Probe.md")).unwrap();
+
+    let vault = scratch.open().unwrap();
+    vault.rebuild_index().unwrap();
+    let first = vault
+        .write_note("Case.md", b"alpha original\n", None)
+        .unwrap();
+
+    if case_insensitive {
+        // The second spelling is the same file: the expected revision is the first's.
+        vault
+            .write_note("case.md", b"beta rewritten\n", Some(&first))
+            .unwrap();
+        assert_eq!(fs::read_dir(scratch.path()).unwrap().count(), 1);
+        assert!(
+            vault.search("alpha").unwrap().is_empty(),
+            "the replaced text is still searchable: a stale entry"
+        );
+        assert_eq!(vault.search("beta").unwrap().len(), 1);
+        assert_eq!(vault.rebuild_index().unwrap().notes, 1);
+    } else {
+        vault
+            .write_note("case.md", b"beta rewritten\n", None)
+            .unwrap();
+        assert_eq!(fs::read_dir(scratch.path()).unwrap().count(), 2);
+        assert!(vault.search("alpha").unwrap().is_empty(), "shared entry");
+        assert_eq!(paths(&vault.search("beta").unwrap()), ["case.md"]);
+        // A rebuild counts both files and keeps the later path of the sorted scan.
+        assert_eq!(vault.rebuild_index().unwrap().notes, 2);
+        assert!(vault.search("alpha").unwrap().is_empty(), "shared entry");
+        assert_eq!(paths(&vault.search("beta").unwrap()), ["case.md"]);
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn a_symbolic_link_is_ignored_by_the_index_and_counted() {

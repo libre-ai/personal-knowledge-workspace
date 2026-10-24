@@ -244,6 +244,56 @@ impl Faults for NotifyAtRename {
     }
 }
 
+/// Panics once the note is renamed and before the index follows: the writer dies
+/// holding the write lock, which poisons it.
+struct PanicAfterRename;
+
+impl Faults for PanicAfterRename {
+    fn before(&self, step: WriteStep) -> io::Result<()> {
+        assert_ne!(step, WriteStep::SyncDirectory, "injected panic");
+        Ok(())
+    }
+}
+
+#[test]
+fn a_writer_that_panicked_does_not_lock_the_vault_for_the_rest_of_the_session() {
+    let (scratch, vault, revision) = vault_with_original();
+    vault.rebuild_index().unwrap();
+
+    let died = thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                vault.write_note_with(
+                    "notes/a.md",
+                    b"first writer\n",
+                    Some(&revision),
+                    &PanicAfterRename,
+                )
+            })
+            .join()
+    });
+    died.unwrap_err();
+    // The note is the new file; only the index never heard of it.
+    assert_eq!(
+        fs::read(scratch.path().join("notes/a.md")).unwrap(),
+        b"first writer\n"
+    );
+
+    let after = vault
+        .write_note("notes/b.md", b"a later write\n", None)
+        .expect("a write after a writer's panic is refused: the lock stayed poisoned");
+    assert_eq!(after, Revision::of(b"a later write\n"));
+    assert_eq!(
+        vault.search("later").unwrap().len(),
+        1,
+        "the later write is not indexed"
+    );
+    // The panicked write left no temporary file, and a rebuild restores its entry.
+    assert_eq!(listing(scratch.path()).len(), 2);
+    assert_eq!(vault.rebuild_index().unwrap().notes, 2);
+    assert_eq!(vault.search("first").unwrap().len(), 1);
+}
+
 #[test]
 fn two_writers_holding_the_same_revision_cannot_both_succeed() {
     let (scratch, vault, revision) = vault_with_original();

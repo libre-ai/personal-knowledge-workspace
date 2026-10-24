@@ -11,6 +11,14 @@
 //! boundary is CA-47 of `docs/cahier-des-charges.md` (WP-4): the front stops
 //! naming the root at all, and a native folder picker, on the Rust side, does.
 //!
+//! Nor is the root pinned: it is a canonical path resolved once at `open`, not a
+//! directory descriptor. If the root is removed and replaced by a symbolic link
+//! after the open, later operations resolve below that link and leave the
+//! folder (measured: open `home/vault`, remove it, link `home/vault` to a
+//! folder outside, `read_note` reads a file there). The threat model excludes
+//! it, since a front that can rearrange the disk has no need of the bridge, and
+//! CA-47 (WP-4) is where the root stops being the front's to name.
+//!
 //! The rules apply to two spellings of the root, the one that was entered and
 //! the one `canonicalize` returns (symbolic links resolved), so that a link in
 //! the home folder to `/etc` is refused by the second and a link named `.x`

@@ -130,17 +130,39 @@ impl Vault {
 
     /// The guard of the write lock. The lock protects an interval, not data: a
     /// writer that panicked left a temporary file its `Drop` removes and no
-    /// state to distrust, so a poisoned lock is taken again rather than refused
-    /// for the rest of the session.
+    /// state to distrust (a panic between the rename and the index update
+    /// leaves a note the index misses, which `rebuild_index` restores), so a
+    /// poisoned lock is taken again rather than refused for the rest of the
+    /// session. The lock of the index is the opposite: it guards data, and
+    /// poisoned it stays refused (README, limits).
     fn writing(&self) -> MutexGuard<'_, ()> {
         self.write_lock
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Scans the folder and replaces the index by one built from it.
+    /// Scans the folder and replaces the index by one built from it. Writes
+    /// queue behind the rebuild: one that ended during the scan would be in the
+    /// folder after the scan has passed it, in the index the replacement then
+    /// throws away, and `search` would miss a note that is on the disk.
+    ///
+    /// shortcut: writes wait for the whole scan (a rebuild is rare and reads the
+    /// folder once); upgrade trigger: a measured write latency under a rebuild,
+    /// then a generation counter per note that lets a write survive the swap.
     pub fn rebuild_index(&self) -> Result<IndexStats, VaultError> {
+        self.rebuild_index_after_scan(|| {})
+    }
+
+    /// `after_scan` runs between the scan and the replacement of the index: the
+    /// only point at which a write that is not excluded would be lost, which a
+    /// test can therefore reach deterministically.
+    fn rebuild_index_after_scan(
+        &self,
+        after_scan: impl FnOnce(),
+    ) -> Result<IndexStats, VaultError> {
+        let _writing = self.writing();
         let (index, stats) = Index::build(&self.root)?;
+        after_scan();
         *self.index_write()? = Some(index);
         Ok(stats)
     }
@@ -197,3 +219,6 @@ impl Vault {
             .map_err(|_| VaultError::Io(std::io::ErrorKind::Other))
     }
 }
+
+#[cfg(test)]
+mod tests;

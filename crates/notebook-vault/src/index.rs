@@ -58,19 +58,26 @@ pub(crate) struct Index {
     postings: Vec<Vec<(u32, u32)>>,
     /// A rewritten note takes a new id at the end; its old slot becomes `None`.
     documents: Vec<Option<Document>>,
-    /// Keyed by the NFC form of the path (see `path_key`), not by the spelling.
+    /// Keyed by the lowercase NFC form of the path (see `path_key`), not by the spelling.
     by_path: HashMap<String, u32>,
 }
 
-/// The key of a path in the index. APFS keeps the spelling a name was created
-/// with and compares names regardless of Unicode normalisation, so `café.md`
-/// written with a precomposed or a decomposed é is one file there; keyed by the
-/// raw string it would be two entries and the older one would outlive its text.
-/// The document keeps the spelling of the latest write, which the file system
-/// opens. A file system that tells the two spellings apart (Linux, NTFS) holds
-/// two files under one key: the entry is the one indexed last.
+/// The key of a path in the index. APFS as shipped on a Mac keeps the spelling
+/// a name was created with and compares names regardless of Unicode
+/// normalisation and of case, so `café.md` written with a precomposed or a
+/// decomposed é, and `Case.md` and `case.md`, are one file there; keyed by the
+/// raw string each pair would be two entries and the older one would outlive
+/// its text. The document keeps the spelling of the latest write, which the
+/// file system opens. A file system that tells the spellings apart (Linux,
+/// NTFS, APFS formatted case-sensitive) holds two files under one key: the
+/// entry is the one indexed last, until the next `rebuild_index`.
+///
+/// shortcut: the case is folded by `char::to_lowercase`, not by the full case
+/// folding of the file system (`ς` and `σ`, `ß` and `ss` stay distinct keys);
+/// upgrade trigger: a note name observed on APFS that differs from another only
+/// by such a pair, then a case-folding crate.
 fn path_key(path: &str) -> String {
-    path.nfc().collect()
+    path.chars().flat_map(char::to_lowercase).nfc().collect()
 }
 
 /// Calls `emit` with each word of `text`: lowercase, without combining marks,

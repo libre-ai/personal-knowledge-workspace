@@ -62,11 +62,35 @@ carries one.
   the vault root is put in front of it (1 024 bytes in all on macOS). The
   system refuses the name and the answer is `vault.invalid_path`, as for a path
   outside the grammar.
-- The index is keyed by the NFC form of a path, so that the spellings of a name
-  that APFS treats as one file (`café.md` written with the precomposed é, or with
-  `e` and U+0301) are one entry.
-  On a file system that keeps them apart (Linux, NTFS), two notes whose names
-  differ only by that spelling share one entry, the one indexed last.
+- The index is keyed by the lowercase NFC form of a path, so that the spellings
+  of a name that APFS as shipped on a Mac treats as one file (`café.md` written
+  with the precomposed é, or with `e` and U+0301; `Case.md` and `case.md`) are
+  one entry. The target of the product is that case-insensitive volume.
+  **The converse limit:** on a file system that keeps those spellings apart
+  (Linux, NTFS, APFS formatted case-sensitive), two distinct notes whose names
+  differ only by Unicode spelling or by case (`A.md` and `a.md`) share one
+  entry, the one indexed last: the other is absent from `search`, and a
+  `rebuild_index` does not bring it back (it indexes in sorted path order, so
+  the later spelling wins, while `IndexStats::notes` still counts both files).
+  The case is lowercased per character, not folded as the file system does
+  (`ς`/`σ`, `ß`/`ss` stay distinct keys).
+- The root is pinned by a canonical path resolved once at `open`, not by a
+  directory descriptor. If the root is removed and replaced by a symbolic link
+  after the open, later operations resolve below that link and leave the
+  folder: measured, `open` of `home/vault`, `remove_dir`, `symlink(outside,
+  home/vault)`, then `read_note` reads a file outside. A front able to
+  rearrange the disk is outside the threat model (it has no need of the
+  bridge); the boundary is CA-47 (WP-4), not this guard.
+- A panic inside `Index::update` poisons the lock of the index, and every
+  operation that needs it (`search`, `rebuild_index`, a write once the rename is
+  done) then answers `vault.io` for the rest of the session. This is a
+  deliberate fail-closed choice: an index half-updated by a panic is not served.
+  Restarting the application restores it (the index is derived data, EF-P04-4).
+  The write lock is the opposite case: it guards an interval, not data, and a
+  poisoned one is taken again.
+- Writes queue behind a `rebuild_index`, which holds the write lock for the
+  whole scan: a note written while the scan runs would otherwise be absent from
+  the index that replaces the old one.
 - `fsync` is requested (`File::sync_all`, `F_FULLFSYNC` on macOS) and its
   position in the sequence is tested through the failure hook; that the disk
   really holds the bytes after a power loss is not something these tests measure.
