@@ -77,6 +77,29 @@ const RULES = `
 .cm-md-link[data-md-blocked="true"] {
   text-decoration: line-through;
 }
+
+/*
+ * The whole note for assistive technologies (accessible-text.ts): drawn nowhere,
+ * kept in the tree (no display: none, visibility: hidden or aria-hidden), its
+ * white space as written. Each block lays out on its own (contain), so that an
+ * edit lays out again the block it changed, not the note.
+ */
+.cm-accessible-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: pre;
+  pointer-events: none;
+}
+
+.cm-accessible-text > div {
+  contain: content;
+}
 `;
 
 /** Thrown when the WebView cannot adopt a stylesheet: the editor would be unstyled under the CSP. */
