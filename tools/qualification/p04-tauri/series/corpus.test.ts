@@ -7,7 +7,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { corpusDigest, generateCorpus } from "../cr10k";
-import { digestDirectory, editCounts, editPlan, readFiles } from "./corpus";
+import { digestDirectory, editCounts, editorLines, editPlan, readFiles } from "./corpus";
+
+// PROTOCOL.md section 10.3: the visible area is compared line by line to the note.
+describe("the lines of a note as the editor holds them", () => {
+  test("CRLF, CR and LF all end a line, and a final break leaves an empty last line", () => {
+    expect(editorLines("a\r\nb\rc\nd\n")).toEqual(["a", "b", "c", "d", ""]);
+    expect(editorLines("one line")).toEqual(["one line"]);
+  });
+});
 
 const scratch: string[] = [];
 afterAll(() => {

@@ -11,12 +11,31 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Interrupted, isInterruptionCause } from "./attempts";
 import { REPORT_PREFIX } from "./instrument";
 
 export interface SeriesEvent {
   seq: number;
   type: string;
   [key: string]: unknown;
+}
+
+/**
+ * An `error` report of the script, as the interruption it stands for: its cause
+ * when it names one of the closed set of PROTOCOL.md section 10.7, else an
+ * instrument error, with the script's message.
+ */
+export function scriptError(event: SeriesEvent): Interrupted {
+  const cause = isInterruptionCause(event.cause) ? event.cause : "instrument-error";
+  return new Interrupted(cause, `series script: ${String(event.reason)}`);
+}
+
+/** PROTOCOL.md section 10.7: the shell process exits before the planned end. */
+export function shellExited(code: number): Interrupted {
+  return new Interrupted(
+    "shell-exited",
+    `the shell exited with code ${code} before the planned end`,
+  );
 }
 
 export function parseEventLine(line: string): SeriesEvent | null {
@@ -72,9 +91,13 @@ export function buildSeriesBinary(repository: string): string {
 
 export interface Launched {
   readonly pid: number;
+  /** `performance.now()` just after the process was created: t0 of the NFR-10 deadlines. */
+  readonly startedAt: number;
   /** The next report of the script; an `error` report or the end of the process rejects. */
   next(timeoutMs: number): Promise<SeriesEvent>;
   readonly exited: Promise<number>;
+  /** The exit code once the process has exited, else null. */
+  exitCode(): number | null;
   stop(): Promise<void>;
 }
 
@@ -89,6 +112,7 @@ export function launchShell(binary: string, vault: string, script: string): Laun
     stdout: "pipe",
     stderr: "inherit",
   });
+  const startedAt = performance.now();
   const guard = new SequenceGuard();
   const events: SeriesEvent[] = [];
   const waiters: ((event: SeriesEvent | Error) => void)[] = [];
@@ -112,9 +136,7 @@ export function launchShell(binary: string, vault: string, script: string): Laun
           const event = parseEventLine(line);
           if (event !== null) {
             guard.accept(event);
-            deliver(
-              event.type === "error" ? new Error(`series script: ${String(event.reason)}`) : event,
-            );
+            deliver(event.type === "error" ? scriptError(event) : event);
           }
         } catch (error) {
           deliver(error instanceof Error ? error : new Error(String(error)));
@@ -123,14 +145,17 @@ export function launchShell(binary: string, vault: string, script: string): Laun
       }
     }
   })();
+  // A report awaited when the process exits: the shell left before the planned end.
   const exited = child.exited.then(async (code) => {
     await reading;
-    deliver(new Error(`series: the shell exited with code ${code}`));
+    deliver(shellExited(code));
     return code;
   });
   return {
     pid: child.pid,
+    startedAt,
     exited,
+    exitCode: () => child.exitCode,
     next(timeoutMs: number): Promise<SeriesEvent> {
       const queued = events.shift();
       if (queued !== undefined) return Promise.resolve(queued);

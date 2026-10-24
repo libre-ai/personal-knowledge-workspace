@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Libre AI contributors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Fixtures written from the output shapes of `ioreg -n Root -d1 -a`,
-// `lsappinfo front`, `lsappinfo info -only pid ...` and `ps -A -o pid=,rss=,comm=`
+// Fixtures written from the output shapes of `ioreg -n Root -d1 -a`, of the
+// NSWorkspace read by `osascript -l JavaScript` and of `ps -A -o pid=,rss=,comm=`
 // on macOS 26, with synthetic values (no session identifier of a real machine).
 
 import { describe, expect, test } from "bun:test";
@@ -10,9 +10,9 @@ import { join } from "node:path";
 
 import { exposedProportion } from "./ax";
 import { KEY_CODES, keyCodeOf } from "./keys";
-import { attributeHelpers, HELPER_NAMES, parseProcessTable, rssMib } from "./memory";
+import { attributeHelpers, HELPER_NAMES, parseProcessTable, rssMib, webKitHelpers } from "./memory";
 import { readProtocol, seriesParameters } from "./protocol";
-import { parseFrontAsn, parseFrontPid, parseSessionLocked } from "./system";
+import { FRONTMOST_COMMAND, parseFrontmostPid, parseSessionLocked } from "./system";
 
 function consoleUsers(...entries: string[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -53,12 +53,18 @@ describe("session lock (PROTOCOL.md section 10.7)", () => {
   });
 });
 
+// PROTOCOL.md section 10.7: NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier.
 describe("frontmost application", () => {
-  test("the ASN of lsappinfo front and the pid of lsappinfo info", () => {
-    expect(parseFrontAsn("ASN:0x0-0x1a01a:\n")).toBe("ASN:0x0-0x1a01a:");
-    expect(parseFrontPid('"pid"=4242\n')).toBe(4242);
-    expect(() => parseFrontAsn("\n")).toThrow();
-    expect(() => parseFrontPid("[ NULL ]\n")).toThrow();
+  test("the API the protocol names is the one read", () => {
+    expect(FRONTMOST_COMMAND.at(-1)).toContain(
+      "NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier",
+    );
+  });
+
+  test("the pid printed by osascript, and nothing else, is read", () => {
+    expect(parseFrontmostPid("4242\n")).toBe(4242);
+    expect(() => parseFrontmostPid("\n")).toThrow();
+    expect(() => parseFrontmostPid("execution error: -2700\n")).toThrow();
   });
 });
 
@@ -133,6 +139,12 @@ describe("NFR-10 processes (PROTOCOL.md section 10.4)", () => {
 
   test("a counted process absent from the table is an error, not a zero", () => {
     expect(() => rssMib(after, [900, 999])).toThrow("999");
+  });
+
+  // PROTOCOL.md section 10.4: no other application using WebKit is open during the series.
+  test("WebKit helpers present before the series are found, by pid", () => {
+    expect(webKitHelpers(before)).toEqual([300]);
+    expect(webKitHelpers(parseProcessTable(table([[1, 100, "/sbin/launchd"]])))).toEqual([]);
   });
 });
 

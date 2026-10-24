@@ -11,7 +11,9 @@
 // count): nothing was judged. `verdict: "fail"` is a measure that was made and
 // is red. A measure can never pass for want of a sample.
 
-import type { MeasureSpec } from "./protocol";
+import type { Interruption } from "./attempts";
+import { INTERRUPTION_CAUSES, type MeasuredWith } from "./manifest";
+import type { MeasureId, MeasureSpec } from "./protocol";
 import { maximum, nearestRankP95, type Sample } from "./stats";
 
 export const RAW_SCHEMA = "p04-series-raw.v1";
@@ -37,24 +39,47 @@ export interface EditPass {
   unexpectedChanges: number;
 }
 
-export type RawOutput =
-  | { schema: typeof RAW_SCHEMA; kind: "latency"; unit: "ms"; samples: Sample[] }
-  | {
-      schema: typeof RAW_SCHEMA;
-      kind: "memory";
-      unit: "Mio";
-      launches: { peakMib: number; samples: number }[];
-    }
-  | { schema: typeof RAW_SCHEMA; kind: "round-trip"; passes: RoundTripPass[] }
-  | { schema: typeof RAW_SCHEMA; kind: "paragraph-edit"; editableFiles: number; passes: EditPass[] }
-  | {
-      schema: typeof RAW_SCHEMA;
-      kind: "accessibility";
-      role: string;
-      total: number;
-      matching: number;
-    }
-  | { schema: typeof RAW_SCHEMA; kind: "unavailable"; reason: string };
+export interface MemoryLaunch {
+  peakMib: number;
+  /** Readings taken (PROTOCOL.md section 10.4). */
+  samples: number;
+  /** Deadlines already passed when the previous reading ended, skipped. */
+  missedTicks: number;
+  medianReadingMs: number;
+}
+
+/**
+ * Every raw output names the measure it belongs to and, for a measure made on
+ * one note, that note: an output swapped between two entries of a manifest
+ * (the two AT-02 configurations share a kind) is caught. It also lists the
+ * passes, configurations or launches interrupted and redone, with their cause
+ * (PROTOCOL.md sections 5 and 10.7), an empty list when there was none.
+ */
+interface Identity {
+  schema: typeof RAW_SCHEMA;
+  measure: MeasureId;
+  note?: string;
+  interruptions: Interruption[];
+  /** The binary and instrument of every sample of the output (PROTOCOL.md section 10.7). */
+  measuredWith: MeasuredWith;
+}
+
+export type RawBody =
+  /**
+   * PROTOCOL.md section 10.1. AT-02: `gapsMs[i]`, from the observation of the
+   * change to the end bound of sample `i`. NFR-03: `callbacks[i]`, the
+   * animation frame callbacks requested up to the end bound of launch `i`. Both
+   * null where the sample is +oo.
+   */
+  | { kind: "latency"; unit: "ms"; samples: Sample[]; gapsMs: (number | null)[] }
+  | { kind: "latency"; unit: "ms"; samples: Sample[]; callbacks: (number | null)[] }
+  | { kind: "memory"; unit: "Mio"; launches: MemoryLaunch[] }
+  | { kind: "round-trip"; passes: RoundTripPass[] }
+  | { kind: "paragraph-edit"; editableFiles: number; passes: EditPass[] }
+  | { kind: "accessibility"; role: string; total: number; matching: number }
+  | { kind: "unavailable"; reason: string };
+
+export type RawOutput = Identity & RawBody;
 
 class Incomplete extends Error {}
 
@@ -80,6 +105,45 @@ function list(value: unknown, what: string, length: number): unknown[] {
   return value;
 }
 
+// One value per sample, null exactly where the sample is +oo; the others pass `valid`.
+function alongside(
+  raw: Record<string, unknown>,
+  key: string,
+  samples: readonly Sample[],
+  valid: (value: number) => boolean,
+): number[] {
+  const values = list(raw[key], key, samples.length);
+  const finite: number[] = [];
+  values.forEach((value, index) => {
+    if (value === null && samples[index] === null) return;
+    if (typeof value !== "number" || !valid(value) || samples[index] === null) {
+      throw new Incomplete(`${key} ${index} does not go with sample ${index}`);
+    }
+    finite.push(value);
+  });
+  return finite;
+}
+
+/**
+ * The gaps between observation and end bound of AT-02 (PROTOCOL.md section
+ * 10.1), one per keystroke, null exactly where the sample is +oo. The finite
+ * gaps are returned: check-report.ts summarises them and compares the summary
+ * of the manifest.
+ */
+export function gapsOf(raw: Record<string, unknown>, samples: readonly Sample[]): number[] {
+  return alongside(raw, "gapsMs", samples, (gap) => Number.isFinite(gap) && gap >= 0);
+}
+
+/** The callbacks requested up to the end bound of each NFR-03 launch (section 10.1): at least one. */
+function callbacksOf(raw: Record<string, unknown>, samples: readonly Sample[]): number[] {
+  return alongside(
+    raw,
+    "callbacks",
+    samples,
+    (callbacks) => Number.isSafeInteger(callbacks) && callbacks >= 1,
+  );
+}
+
 function latency(spec: MeasureSpec, raw: Record<string, unknown>): Evaluation {
   if (raw.unit !== "ms") throw new Incomplete("latency unit is not ms");
   const samples = list(raw.samples, "samples", spec.count).map((sample, index): Sample => {
@@ -89,6 +153,8 @@ function latency(spec: MeasureSpec, raw: Record<string, unknown>): Evaluation {
     }
     return sample;
   });
+  if (spec.id === "nfr-03") callbacksOf(raw, samples);
+  else gapsOf(raw, samples);
   const value = nearestRankP95(samples);
   return {
     ok: true,
@@ -104,6 +170,11 @@ function memory(spec: MeasureSpec, raw: Record<string, unknown>): Evaluation {
     const launch = record(entry, `launch ${index}`);
     if (count(launch.samples, `readings of launch ${index}`) === 0) {
       throw new Incomplete(`launch ${index} has no reading`);
+    }
+    count(launch.missedTicks, `skipped deadlines of launch ${index}`);
+    const median = launch.medianReadingMs;
+    if (typeof median !== "number" || !Number.isFinite(median) || median < 0) {
+      throw new Incomplete(`median reading time of launch ${index} is not recorded`);
     }
     const peak = launch.peakMib;
     if (typeof peak !== "number" || !Number.isFinite(peak) || peak <= 0) {
@@ -197,6 +268,28 @@ function accessibility(spec: MeasureSpec, raw: Record<string, unknown>): Evaluat
   return { ok: true, value, verdict: value >= spec.limit ? "pass" : "fail", examined: 1 };
 }
 
+// The interruptions are recorded with a cause of the closed set of PROTOCOL.md
+// section 10.7, never silently absent.
+function interruptions(value: unknown): void {
+  if (!Array.isArray(value)) {
+    throw new Incomplete("interruptions are not recorded (a list, empty if none)");
+  }
+  value.forEach((entry, index) => {
+    const { unit, attempt, cause, reason } = record(entry, `interruption ${index}`);
+    if (typeof unit !== "string" || unit === "" || typeof reason !== "string" || reason === "") {
+      throw new Incomplete(`interruption ${index} has no unit or no reason`);
+    }
+    if (!(INTERRUPTION_CAUSES as readonly unknown[]).includes(cause)) {
+      throw new Incomplete(
+        `interruption ${index}: cause ${String(cause)} is outside the closed set`,
+      );
+    }
+    if (count(attempt, `attempt of interruption ${index}`) === 0) {
+      throw new Incomplete(`interruption ${index}: attempts are counted from 1`);
+    }
+  });
+}
+
 export function evaluate(spec: MeasureSpec, input: unknown): Evaluation {
   try {
     const raw = record(input, "raw output");
@@ -208,6 +301,15 @@ export function evaluate(spec: MeasureSpec, input: unknown): Evaluation {
     if (raw.kind !== spec.kind) {
       throw new Incomplete(`raw output is a ${String(raw.kind)}, the measure is a ${spec.kind}`);
     }
+    if (raw.measure !== spec.id) {
+      throw new Incomplete(`raw output belongs to ${String(raw.measure)}, the entry is ${spec.id}`);
+    }
+    if (spec.note !== null && raw.note !== spec.note) {
+      throw new Incomplete(
+        `raw output was made on ${String(raw.note)}, the measure is made on ${spec.note}`,
+      );
+    }
+    interruptions(raw.interruptions);
     switch (spec.kind) {
       case "latency":
         return latency(spec, raw);

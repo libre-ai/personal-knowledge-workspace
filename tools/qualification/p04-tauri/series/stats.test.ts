@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { maximum, nearestRankP95 } from "./stats";
+import { maximum, nearestRankP95, summary } from "./stats";
 
 // Expected values are written from PROTOCOL.md section 4, not from the code:
 // samples sorted ascending, p95 = sample of rank ceil(0.95 x N), counted from 1.
@@ -44,5 +44,18 @@ describe("maximum (NFR-10 ceiling)", () => {
 
   test("an empty sample has no maximum", () => {
     expect(() => maximum([])).toThrow();
+  });
+});
+
+// PROTOCOL.md section 10.1: the gap between observation and end bound is
+// recorded as count, p50, p95 and maximum, at the nearest rank of section 4.
+describe("summary (count, p50, p95, maximum)", () => {
+  test("20 values 1..20: p50 of rank 10, p95 of rank 19, maximum 20", () => {
+    const values = Array.from({ length: 20 }, (_, index) => 20 - index);
+    expect(summary(values)).toEqual({ count: 20, p50Ms: 10, p95Ms: 19, maxMs: 20 });
+  });
+
+  test("no value gives no summary, never zeros", () => {
+    expect(summary([])).toBeNull();
   });
 });

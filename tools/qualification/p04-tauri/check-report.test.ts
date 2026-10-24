@@ -8,6 +8,7 @@
 // check (PROTOCOL.md section 10.8) runs on a real history.
 
 import { afterAll, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -61,9 +62,32 @@ function write(root: string, relative: string, text: string): void {
   writeFileSync(target, text);
 }
 
+// The binary and instrument of the fixture run, carried by the manifest and by every raw output.
+const WITH = {
+  binarySha256: createHash("sha256").update("fixture binary").digest("hex"),
+  harnessCommit: "b".repeat(40),
+  scriptSha256: "c".repeat(64),
+};
+
 // A raw output that passes each threshold, built from the protocol counts.
 function greenRaw(spec: MeasureSpec): RawOutput {
-  const filled = <T>(length: number, value: T): T[] => Array.from({ length }, () => value);
+  const identity =
+    spec.note === null
+      ? { measure: spec.id, interruptions: [], measuredWith: WITH }
+      : { measure: spec.id, note: spec.note, interruptions: [], measuredWith: WITH };
+  return { ...identity, ...greenBody(spec) } as unknown as RawOutput;
+}
+
+const filled = <T>(length: number, value: T): T[] => Array.from({ length }, () => value);
+// AT-02: a gap of 2 ms from observation to bound per keystroke; NFR-03: 3 callbacks per launch.
+const GAP_MS = 2;
+const latencyExtra = (spec: MeasureSpec) =>
+  spec.id === "nfr-03"
+    ? { callbacks: filled(spec.count, 3) }
+    : { gapsMs: filled(spec.count, GAP_MS) };
+const FRAME_PERIOD = { intervals: 600, p50Ms: 17, p95Ms: 18, maxMs: 25 };
+
+function greenBody(spec: MeasureSpec): Record<string, unknown> {
   switch (spec.kind) {
     case "latency":
       return {
@@ -71,13 +95,19 @@ function greenRaw(spec: MeasureSpec): RawOutput {
         kind: "latency",
         unit: "ms",
         samples: filled(spec.count, spec.limit / 2),
+        ...latencyExtra(spec),
       };
     case "memory":
       return {
         schema: RAW_SCHEMA,
         kind: "memory",
         unit: "Mio",
-        launches: filled(spec.count, { peakMib: 300, samples: 40 }),
+        launches: filled(spec.count, {
+          peakMib: 300,
+          samples: 40,
+          missedTicks: 0,
+          medianReadingMs: 11,
+        }),
       };
     case "round-trip": {
       const files = spec.limit;
@@ -127,6 +157,11 @@ function greenFixture(commit: string): Fixture {
       raw: path,
       value: toJsonValue(evaluation.value),
       verdict: evaluation.verdict,
+      framePeriods: filled(spec.framedLaunches, FRAME_PERIOD),
+      // Every keystroke gap is GAP_MS: the summary is GAP_MS at every rank.
+      boundGap: spec.id.startsWith("at-02")
+        ? { count: spec.count, p50Ms: GAP_MS, p95Ms: GAP_MS, maxMs: GAP_MS }
+        : null,
     };
   });
   return {
@@ -148,7 +183,11 @@ function greenFixture(commit: string): Fixture {
         osVersion: "fixture",
       },
       corpusSha256: parameters.corpusSha256,
+      protocolSha256: createHash("sha256").update(protocol).digest("hex"),
+      binarySha256: WITH.binarySha256,
+      instrument: { harnessCommit: WITH.harnessCommit, scriptSha256: WITH.scriptSha256 },
       rejectedLaunches: { "session-locked": 0, "display-asleep": 0, "helpers-unattributed": 0 },
+      stopped: null,
       measures,
     },
   };
@@ -226,9 +265,14 @@ describe("check-report.ts exit codes (CA-48)", () => {
           if (spec === undefined) throw new Error("no nfr-03");
           const raw: RawOutput = {
             schema: RAW_SCHEMA,
+            measure: "nfr-03",
+            note: spec.note ?? "",
+            interruptions: [],
+            measuredWith: WITH,
             kind: "latency",
             unit: "ms",
             samples: Array.from({ length: spec.count }, () => spec.limit + 1),
+            callbacks: Array.from({ length: spec.count }, () => 7),
           };
           fixture.raws.set("raw/nfr-03.json", raw);
           const entry = measureOf(fixture, "nfr-03");
@@ -274,33 +318,44 @@ describe("check-report.ts recomputes instead of trusting the manifest", () => {
         edit: (fixture) => {
           fixture.raws.set("raw/nfr-10.json", {
             schema: RAW_SCHEMA,
+            measure: "nfr-10",
+            note: "notes/00/note-00000.md",
+            interruptions: [],
+            measuredWith: WITH,
             kind: "memory",
             unit: "Mio",
             launches: Array.from({ length: parameters.nfr10Launches }, () => ({
               peakMib: 501,
               samples: 3,
+              missedTicks: 0,
+              medianReadingMs: 11,
             })),
           });
         },
       }),
     );
-    expect(out).toContain("nfr-10");
+    expect(out).toContain("nfr-10: declared");
     expect(code).toBe(2);
   });
 
   test("a raw output with fewer samples than the protocol count is incomplete", () => {
-    const { code } = run(
+    const { code, out } = run(
       repositoryWith({
         edit: (fixture) => {
           fixture.raws.set("raw/at-02-1-mib.json", {
             schema: RAW_SCHEMA,
+            measure: "at-02-1-mib",
+            note: "notes/00/note-00000.md",
+            interruptions: [],
             kind: "latency",
             unit: "ms",
             samples: [1, 2, 3],
+            gapsMs: [1, 1, 1],
           });
         },
       }),
     );
+    expect(out).toContain("the protocol requires");
     expect(code).toBe(2);
   });
 
@@ -310,6 +365,8 @@ describe("check-report.ts recomputes instead of trusting the manifest", () => {
         edit: (fixture) => {
           fixture.raws.set("raw/accessibility.json", {
             schema: RAW_SCHEMA,
+            measure: "accessibility",
+            interruptions: [],
             kind: "unavailable",
             reason: "fixture",
           });
@@ -385,6 +442,264 @@ describe("check-report.ts binds the report to the protocol, the corpus and the m
       }),
     );
     expect(code).toBe(2);
+  });
+});
+
+describe("check-report.ts binds the report to the text measured (PROTOCOL.md section 10.8)", () => {
+  test("a protocolSha256 other than PROTOCOL.md at commit P is incomplete", () => {
+    const { code, out } = run(
+      repositoryWith({
+        edit: (fixture) => {
+          fixture.manifest.protocolSha256 = "0".repeat(64);
+        },
+      }),
+    );
+    expect(out).toContain("protocolSha256");
+    expect(code).toBe(2);
+  });
+
+  test("PROTOCOL.md is read at commit P, not in the working tree", () => {
+    const root = repositoryWith();
+    // An uncommitted edit that would change a threshold of the working tree.
+    write(
+      root,
+      "tools/qualification/p04-tauri/PROTOCOL.md",
+      protocol.replace(
+        "| AT-02, latence frappe → rendu, aperçu en direct actif, 5 000 lignes | p95 ≤ 16 ms |",
+        "| AT-02, latence frappe → rendu, aperçu en direct actif, 5 000 lignes | p95 ≤ 32 ms |",
+      ),
+    );
+    const { code, out } = run(root);
+    expect(out).toContain("7 pass, 0 fail");
+    expect(code).toBe(0);
+  });
+
+  test("a manifest without the SHA-256 of the binary measured is incomplete", () => {
+    const { code } = run(
+      repositoryWith({
+        edit: (fixture) => {
+          (fixture.manifest as unknown as Record<string, unknown>).binarySha256 = "";
+        },
+      }),
+    );
+    expect(code).toBe(2);
+  });
+
+  test("raw outputs swapped between the two AT-02 configurations are incomplete", () => {
+    const { code, out } = run(
+      repositoryWith({
+        edit: (fixture) => {
+          measureOf(fixture, "at-02-5000-lines").raw = "raw/at-02-1-mib.json";
+          measureOf(fixture, "at-02-1-mib").raw = "raw/at-02-5000-lines.json";
+        },
+      }),
+    );
+    expect(out).toContain("belongs to");
+    expect(code).toBe(2);
+  });
+});
+
+// PROTOCOL.md section 10.1: the frame period (600 intervals) of each launch of
+// AT-02 and NFR-03, and the gap observation -> bound per AT-02 configuration.
+describe("what section 10.1 makes the report record", () => {
+  const withEntry = (id: string, key: string, value: unknown) =>
+    run(
+      repositoryWith({
+        edit: (fixture) => {
+          (measureOf(fixture, id) as unknown as Record<string, unknown>)[key] = value;
+        },
+      }),
+    );
+
+  test("an entry without frame periods is incomplete", () => {
+    const { code, out } = withEntry("nfr-03", "framePeriods", undefined);
+    expect(out).toContain("nfr-03: framePeriods is not recorded");
+    expect(code).toBe(2);
+  });
+
+  test("one NFR-03 launch without its frame period is incomplete", () => {
+    const { code, out } = withEntry("nfr-03", "framePeriods", filled(59, FRAME_PERIOD));
+    expect(out).toContain("59 frame periods for 60 launches");
+    expect(code).toBe(2);
+  });
+
+  test("a frame period on a measure that reads none is incomplete", () => {
+    const { code, out } = withEntry("nfr-10", "framePeriods", [FRAME_PERIOD]);
+    expect(out).toContain("1 frame periods for 0 launches");
+    expect(code).toBe(2);
+  });
+
+  test("a frame period of another count of intervals, a missing or disordered statistic, is incomplete", () => {
+    for (const period of [
+      { ...FRAME_PERIOD, intervals: 599 },
+      { intervals: 600, p50Ms: 17, maxMs: 25 },
+      { ...FRAME_PERIOD, p50Ms: 19 },
+      { ...FRAME_PERIOD, p95Ms: 26 },
+      { ...FRAME_PERIOD, p50Ms: -1 },
+    ]) {
+      const { code, out } = withEntry("at-02-1-mib", "framePeriods", [period]);
+      expect(out).toContain("at-02-1-mib: frame period of launch 0");
+      expect(code).toBe(2);
+    }
+  });
+
+  test("an AT-02 entry without the gap observation -> bound is incomplete", () => {
+    const { code, out } = withEntry("at-02-5000-lines", "boundGap", null);
+    expect(out).toContain(
+      "at-02-5000-lines: boundGap null differs from the gaps of the raw output",
+    );
+    expect(code).toBe(2);
+  });
+
+  test("a gap summary the raw gaps do not give is incomplete", () => {
+    const { code, out } = withEntry("at-02-1-mib", "boundGap", {
+      count: parameters.at02Keystrokes,
+      p50Ms: GAP_MS,
+      p95Ms: GAP_MS,
+      maxMs: GAP_MS + 1,
+    });
+    expect(out).toContain("at-02-1-mib: boundGap");
+    expect(code).toBe(2);
+  });
+
+  test("a gap summary on a measure other than AT-02 is incomplete", () => {
+    const { code, out } = withEntry("nfr-03", "boundGap", {
+      count: 1,
+      p50Ms: 1,
+      p95Ms: 1,
+      maxMs: 1,
+    });
+    expect(out).toContain("nfr-03: boundGap is recorded for AT-02 only");
+    expect(code).toBe(2);
+  });
+});
+
+// PROTOCOL.md section 10.7: three rejections or interruptions of one cause in a row
+// stop the series, recorded with that cause and no verdict.
+// PROTOCOL.md section 10.7: a corrected instrument or product starts the series
+// again; no sample of another binary or instrument enters a verdict.
+describe("one binary and one instrument per report (PROTOCOL.md section 10.7)", () => {
+  test("a manifest without the identity of the instrument is incomplete", () => {
+    const { code, out } = run(
+      repositoryWith({
+        edit: (fixture) => {
+          (fixture.manifest as unknown as Record<string, unknown>).instrument = undefined;
+        },
+      }),
+    );
+    expect(out).toContain("instrument is not the commit of the harness");
+    expect(code).toBe(2);
+  });
+
+  test("a measure whose samples were made with another binary is incomplete", () => {
+    const { code, out } = run(
+      repositoryWith({
+        edit: (fixture) => {
+          const raw = fixture.raws.get("raw/nfr-10.json") as Record<string, unknown>;
+          raw.measuredWith = { ...WITH, binarySha256: "d".repeat(64) };
+        },
+      }),
+    );
+    expect(out).toContain("nfr-10: measured with");
+    expect(code).toBe(2);
+  });
+
+  test("a measure whose samples were made with another instrument, or that does not say, is incomplete", () => {
+    for (const measuredWith of [
+      { ...WITH, scriptSha256: "e".repeat(64) },
+      { ...WITH, harnessCommit: "f".repeat(40) },
+      undefined,
+    ]) {
+      const { code, out } = run(
+        repositoryWith({
+          edit: (fixture) => {
+            const raw = fixture.raws.get("raw/at-01-round-trip.json") as Record<string, unknown>;
+            raw.measuredWith = measuredWith;
+          },
+        }),
+      );
+      expect(out).toContain("at-01-round-trip: measured with");
+      expect(code).toBe(2);
+    }
+  });
+});
+
+describe("the stop of the series (PROTOCOL.md section 10.7)", () => {
+  const withStopped = (stopped: unknown) =>
+    run(
+      repositoryWith({
+        edit: (fixture) => {
+          (fixture.manifest as unknown as Record<string, unknown>).stopped = stopped;
+        },
+      }),
+    );
+
+  test("a stopped series has no verdict, and shell-exited is named a defect of the product", () => {
+    const { code, out } = withStopped({
+      cause: "shell-exited",
+      defect: "product",
+      unit: "nfr-03 launch 7",
+    });
+    expect(out).toContain(
+      "the series stopped at nfr-03 launch 7: 3 consecutive shell-exited, a defect of the product",
+    );
+    expect(code).toBe(2);
+  });
+
+  test("a manifest without the stopped field is incomplete", () => {
+    const { code, out } = withStopped(undefined);
+    expect(out).toContain("stopped is not recorded");
+    expect(code).toBe(2);
+  });
+
+  test("a cause outside the closed set, or a defect that is not the cause's, is incomplete", () => {
+    expect(withStopped({ cause: "window-hidden", defect: "machine", unit: "u" }).out).toContain(
+      "outside the closed set",
+    );
+    expect(withStopped({ cause: "shell-exited", defect: "machine", unit: "u" }).out).toContain(
+      "shell-exited is a defect of the product",
+    );
+  });
+});
+
+describe("rejected launches (PROTOCOL.md section 10.7)", () => {
+  const withRejected = (rejected: unknown) =>
+    run(
+      repositoryWith({
+        edit: (fixture) => {
+          (fixture.manifest as unknown as Record<string, unknown>).rejectedLaunches = rejected;
+        },
+      }),
+    );
+
+  test("a cause outside the closed set is incomplete", () => {
+    const { code, out } = withRejected({
+      "session-locked": 0,
+      "display-asleep": 0,
+      "helpers-unattributed": 0,
+      other: 1,
+    });
+    expect(out).toContain("rejectedLaunches");
+    expect(code).toBe(2);
+  });
+
+  test("a missing cause is incomplete", () => {
+    expect(withRejected({ "session-locked": 0, "display-asleep": 0 }).code).toBe(2);
+  });
+
+  test("a negative or non-integer count is incomplete", () => {
+    expect(
+      withRejected({ "session-locked": -1, "display-asleep": 0, "helpers-unattributed": 0 }).code,
+    ).toBe(2);
+    expect(
+      withRejected({ "session-locked": 0.5, "display-asleep": 0, "helpers-unattributed": 0 }).code,
+    ).toBe(2);
+  });
+
+  test("rejected launches do not change a green verdict", () => {
+    expect(
+      withRejected({ "session-locked": 3, "display-asleep": 1, "helpers-unattributed": 2 }).code,
+    ).toBe(0);
   });
 });
 

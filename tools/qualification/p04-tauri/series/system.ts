@@ -63,20 +63,30 @@ export function rejection(): Rejection | null {
   return null;
 }
 
-export function parseFrontAsn(text: string): string {
-  const asn = /ASN:[0-9a-fx-]+:/.exec(text)?.[0];
-  if (asn === undefined) throw new Error("lsappinfo front: no application");
-  return asn;
-}
+/**
+ * PROTOCOL.md section 10.7: the frontmost application is read as
+ * `NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier`. A new
+ * `osascript` process reads it each time: a process that does not spin a run
+ * loop keeps a stale value of this property, which macOS updates by notification.
+ * shortcut: one process per keystroke (40 to 90 ms, measured 2026-10-24);
+ * upgrade trigger: a series whose AT-01 edit launches are too slow to complete.
+ */
+export const FRONTMOST_COMMAND = [
+  "osascript",
+  "-l",
+  "JavaScript",
+  "-e",
+  'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier',
+] as const;
 
-export function parseFrontPid(text: string): number {
-  const pid = /"pid"=([0-9]+)/.exec(text)?.[1];
-  if (pid === undefined) throw new Error("lsappinfo info: no pid");
+export function parseFrontmostPid(text: string): number {
+  const pid = /^\s*([0-9]+)\s*$/.exec(text)?.[1];
+  if (pid === undefined)
+    throw new Error(`NSWorkspace: no frontmost application pid in ${JSON.stringify(text)}`);
   return Number(pid);
 }
 
 /** The pid of the frontmost application: system keystrokes go there. */
 export function frontmostPid(): number {
-  const asn = parseFrontAsn(run(["lsappinfo", "front"]));
-  return parseFrontPid(run(["lsappinfo", "info", "-only", "pid", asn]));
+  return parseFrontmostPid(run([...FRONTMOST_COMMAND]));
 }

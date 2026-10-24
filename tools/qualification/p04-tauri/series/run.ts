@@ -7,71 +7,106 @@
 //   bun tools/qualification/p04-tauri/series/run.ts --out DIR [--trial N] [--only ID,ID] [--binary PATH]
 //
 // `--out` must not exist. The paquet WP-5 passes `tools/qualification/p04-tauri/reports/<ID>`.
-// `--trial N` caps every count at N to tune the harness: the manifest then says
-// `trial: true` and check-report.ts refuses it. A measure that cannot be made
-// here (no Accessibility permission, a control that fails, a launch that keeps
-// being rejected) is written as an `unavailable` raw output with its reason:
-// never a zero, never a pass.
+// `--trial N` caps every count at N, `--only` makes a subset of the measures and
+// `--binary` measures another binary than the one built from the commit: each
+// makes a trial, the manifest says `trial: true` and check-report.ts refuses it.
+// A pass, a configuration or a launch interrupted for a cause of PROTOCOL.md
+// section 10.7 is recorded in the raw output of its measure and redone
+// (`attempts.ts`); three rejections or interruptions of one cause in a row stop
+// the series, recorded in the manifest without a verdict. A measure that cannot
+// be made here (no Accessibility permission, a start-bound control that fails)
+// is written as an `unavailable` raw output with its reason: never a zero,
+// never a pass.
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { LARGE_NOTE_INDEX, LONG_NOTE_INDEX, notePath, writeCorpus } from "../cr10k";
-import { compareSnapshots, snapshotDirectory } from "../oracle";
-import { exposedProportion, readFocusedText } from "./ax";
-import { digestDirectory, editCounts, editPlan, readFiles } from "./corpus";
+import { at01Series } from "./at01";
 import {
-  type EditPass,
-  evaluate,
-  RAW_SCHEMA,
-  type RawOutput,
-  type RoundTripPass,
-} from "./evaluate";
-import { instrumentationScript, type Plan } from "./instrument";
+  Interrupted,
+  type Interruption,
+  SeriesStopped,
+  Streak,
+  Unavailable,
+  untilCompleted,
+} from "./attempts";
+import { exposedProportion, readFocusedText } from "./ax";
+import { digestDirectory, editorLines, readFiles } from "./corpus";
+import { evaluate, type MemoryLaunch, type RawBody, type RawOutput } from "./evaluate";
+import { instrumentationScript, type Plan, SCRIPT_SHA256 } from "./instrument";
 import { accessibilityTrusted, postCharacter } from "./keys";
+import { Rejected, withLaunch } from "./launch";
 import { detectMachine } from "./machine";
-import { MANIFEST_SCHEMA, type MeasureEntry, type ReportManifest, toJsonValue } from "./manifest";
+import {
+  defectOf,
+  type FramePeriod,
+  type GapSummary,
+  type MeasuredWith,
+  type MeasureEntry,
+  type RejectionCause,
+  type SeriesStop,
+  toJsonValue,
+} from "./manifest";
 import {
   attributeHelpers,
   HELPER_NAMES,
   type ProcessTable,
   readProcessTable,
   rssMib,
+  webKitHelpers,
 } from "./memory";
+import { isTrial, parseOptions } from "./options";
 import {
+  FRAME_PERIOD_INTERVALS,
+  type MeasureId,
   type MeasureSpec,
   measureSpecs,
-  readProtocol,
+  PROTOCOL_RELATIVE_PATH,
   type SeriesParameters,
   seriesParameters,
 } from "./protocol";
-import { buildSeriesBinary, expectEvent, type Launched, launchShell } from "./shell";
-import { frontmostPid, type Rejection, rejection } from "./system";
+import { framePeriodOf, manifestOf, measuredWithOf, rawOf } from "./report";
+import { realClock, sampleOnDeadlines } from "./sampler";
+import { buildSeriesBinary, expectEvent, type Launched, launchShell, shellExited } from "./shell";
+import { summary } from "./stats";
+import { frontmostPid, rejection } from "./system";
 
 const REPOSITORY = join(import.meta.dir, "..", "..", "..", "..");
 const REPORT_TIMEOUT_MS = 120_000;
-const MAX_REJECTIONS = 10;
+/** Wait before reading again when the session is locked or the screen off. */
+const REJECTION_PAUSE_MS = 5000;
 /** PROTOCOL.md section 10.2: the page blocks 500 ms; a platform timestamp measures at least 250 ms. */
 const CONTROL_BLOCK_MS = 500;
 const CONTROL_MINIMUM_MS = 250;
-const KEY_GAP_MS = 20;
-
-class Unavailable extends Error {}
-
-type RejectionCause = Rejection | "helpers-unattributed";
-
-/** What a launch body returns when its launch is not a sample and is redone. */
-class Rejected {
-  constructor(readonly cause: RejectionCause) {}
-}
+/**
+ * NFR-03: the lines of the note the plan carries, far more than the visible area
+ * holds; a visible area that holds more is an instrument error, never "shown".
+ */
+const OPEN_PLAN_LINES = 500;
 
 interface Context {
   parameters: SeriesParameters;
   binary: string;
+  measuredWith: MeasuredWith;
   trusted: boolean;
   cap: (count: number) => number;
   rejected: Record<RejectionCause, number>;
+  streak: Streak;
+}
+
+/** What a measure gives: its raw output, its frame periods and, for AT-02, its gap summary. */
+interface Measured {
+  raw: RawOutput;
+  framePeriods: FramePeriod[];
+  boundGap: GapSummary | null;
+}
+
+interface Made {
+  body: RawBody;
+  framePeriods: FramePeriod[];
+  boundGap: GapSummary | null;
 }
 
 function git(args: string[]): string {
@@ -106,336 +141,481 @@ function noteBytes(vault: string, index: number): Uint8Array {
   return bytes;
 }
 
-/** Keystrokes go to the frontmost window: never type into another application. */
-function typeInto(shell: Launched, text: string): Promise<void> {
-  if (frontmostPid() !== shell.pid)
-    throw new Unavailable("the shell is not the frontmost application");
-  return (async () => {
-    for (const character of text) {
-      postCharacter(character);
-      await Bun.sleep(KEY_GAP_MS);
+/**
+ * System keystrokes, one per character (PROTOCOL.md section 10.2). Just before
+ * each one, the exit of the shell is read, then the frontmost application
+ * (section 10.7): a dead shell is never read as not frontmost.
+ */
+async function typeInto(shell: Launched, text: string, gapMs: number): Promise<void> {
+  let first = true;
+  for (const character of text) {
+    if (!first) await Bun.sleep(gapMs);
+    first = false;
+    const code = shell.exitCode();
+    if (code !== null) throw shellExited(code);
+    const front = frontmostPid();
+    if (front !== shell.pid) {
+      throw new Interrupted(
+        "shell-not-frontmost",
+        `pid ${front} is frontmost, the shell is ${shell.pid}`,
+      );
     }
-  })();
+    postCharacter(character);
+  }
 }
 
-/**
- * One launch with the rejection rule of PROTOCOL.md section 10.7: a launch
- * made with a locked session or a switched-off screen is redone, as is one
- * whose body reports helpers it cannot attribute.
- */
-async function withLaunch<T>(
+/** One launch with the rejection rule of PROTOCOL.md section 10.7 (`launch.ts`). */
+function launch<T>(
   context: Context,
   vault: string,
   plan: Plan,
+  unit: string,
   body: (shell: Launched, before: ProcessTable) => Promise<T | Rejected>,
 ): Promise<T> {
-  for (let attempt = 0; attempt < MAX_REJECTIONS; attempt += 1) {
-    const before = readProcessTable();
-    const cause = rejection();
-    if (cause !== null) {
-      context.rejected[cause] += 1;
-      await Bun.sleep(5000);
-      continue;
-    }
-    const shell = launchShell(context.binary, vault, instrumentationScript(plan));
-    try {
-      const result = await body(shell, before);
-      const after = rejection();
-      if (after !== null) {
-        context.rejected[after] += 1;
-        continue;
-      }
-      if (result instanceof Rejected) {
-        context.rejected[result.cause] += 1;
-        continue;
-      }
-      return result;
-    } finally {
-      await shell.stop();
-    }
-  }
-  throw new Unavailable(`${MAX_REJECTIONS} launches rejected in a row`);
+  return withLaunch(
+    {
+      rejection,
+      readTable: readProcessTable,
+      launch: () => launchShell(context.binary, vault, instrumentationScript(plan)),
+      pause: () => Bun.sleep(REJECTION_PAUSE_MS),
+    },
+    { rejected: context.rejected, streak: context.streak, unit },
+    body,
+  );
 }
 
+/** The planned end of a launch: a clean exit, else the shell left before it. */
 async function exitedCleanly(shell: Launched): Promise<void> {
-  const code = await Promise.race([shell.exited, Bun.sleep(REPORT_TIMEOUT_MS).then(() => -1)]);
-  if (code !== 0) throw new Error(`the shell exited with code ${code}`);
+  const code = await Promise.race([shell.exited, Bun.sleep(REPORT_TIMEOUT_MS).then(() => null)]);
+  if (code === null) throw new Error("the shell did not exit at the end of the launch");
+  if (code !== 0) throw shellExited(code);
 }
 
-async function roundTrip(spec: MeasureSpec, context: Context): Promise<RawOutput> {
-  const passes: RoundTripPass[] = [];
-  for (let pass = 0; pass < context.cap(spec.count); pass += 1) {
-    const { vault, dispose } = freshVault(context.parameters);
-    try {
-      const reference = snapshotDirectory(vault);
-      const paths = [...reference.keys()];
-      await withLaunch(
-        context,
-        vault,
-        { mode: "round-trip", paths, saveTimeoutMs: context.parameters.saveTimeoutMs },
-        async (shell) => {
-          const done = await expectEvent(shell, "done", REPORT_TIMEOUT_MS);
-          console.log(
-            `series: at-01 round trip pass ${pass}: opened ${String(done.opened)}, refused ${String(done.refused)}`,
-          );
-          await exitedCleanly(shell);
-        },
-      );
-      const comparison = compareSnapshots(reference, snapshotDirectory(vault));
-      const { examined, identical, changed, missing, added } = comparison;
-      passes.push({ examined, identical, changed, missing, added });
-      console.log(`series: at-01 round trip pass ${pass}: ${identical}/${examined} identical`);
-    } finally {
-      dispose();
+async function framesOf(shell: Launched): Promise<FramePeriod> {
+  return framePeriodOf(await expectEvent(shell, "frames", REPORT_TIMEOUT_MS));
+}
+
+function unavailable(error: unknown): RawBody {
+  return { kind: "unavailable", reason: error instanceof Error ? error.message : String(error) };
+}
+
+const notMeasured = (raw: RawOutput): Measured => ({ raw, framePeriods: [], boundGap: null });
+
+// ---- AT-01: both lines come from the same passes (PROTOCOL.md section 10.5).
+async function at01(
+  roundTripSpec: MeasureSpec | undefined,
+  editSpec: MeasureSpec | undefined,
+  context: Context,
+): Promise<Map<MeasureId, Measured>> {
+  const results = new Map<MeasureId, Measured>();
+  const interruptions: Interruption[] = [];
+  const spec = roundTripSpec ?? editSpec;
+  if (spec === undefined) return results;
+  const all = (body: RawBody) => {
+    for (const chosen of [roundTripSpec, editSpec]) {
+      if (chosen !== undefined)
+        results.set(
+          chosen.id,
+          notMeasured(rawOf(chosen, body, interruptions, context.measuredWith)),
+        );
     }
-  }
-  return { schema: RAW_SCHEMA, kind: "round-trip", passes };
-}
-
-async function paragraphEdit(spec: MeasureSpec, context: Context): Promise<RawOutput> {
-  if (!context.trusted)
-    throw new Unavailable("AXIsProcessTrusted() is false: system keystrokes are dropped");
-  const passes: EditPass[] = [];
-  let editableFiles = 0;
-  for (let pass = 0; pass < context.cap(spec.count); pass += 1) {
-    const { vault, dispose } = freshVault(context.parameters);
-    try {
-      const before = readFiles(vault);
-      const plan = editPlan(before);
-      editableFiles = plan.items.length;
-      const items = plan.items.map(({ path, offset }) => ({ path, offset }));
-      const states: Record<string, number> = {};
-      await withLaunch(
-        context,
-        vault,
-        {
-          mode: "edit",
-          items,
-          text: context.parameters.at01EditText,
-          saveTimeoutMs: context.parameters.saveTimeoutMs,
-        },
-        async (shell) => {
-          for (;;) {
-            const event = await shell.next(REPORT_TIMEOUT_MS);
-            if (event.type === "ready-edit") await typeInto(shell, context.parameters.at01EditText);
-            else if (event.type === "edited")
-              states[String(event.state)] = (states[String(event.state)] ?? 0) + 1;
-            else if (event.type === "done") break;
-            else throw new Error(`unexpected report ${event.type}`);
-          }
-          await exitedCleanly(shell);
-        },
-      );
-      const counts = editCounts(before, readFiles(vault), plan);
-      passes.push(counts);
-      console.log(
-        `series: at-01 edit pass ${pass}: ${JSON.stringify(counts)} states ${JSON.stringify(states)}`,
-      );
-    } finally {
-      dispose();
+  };
+  try {
+    if (editSpec !== undefined && !context.trusted) {
+      throw new Unavailable("AXIsProcessTrusted() is false: system keystrokes are dropped");
     }
+    const series = await at01Series(
+      context.cap(spec.count),
+      editSpec !== undefined,
+      {
+        freshCopy: () => freshVault(context.parameters),
+        roundTripLaunch: (vault, paths, unit) =>
+          launch(
+            context,
+            vault,
+            { mode: "round-trip", paths, saveTimeoutMs: context.parameters.saveTimeoutMs },
+            unit,
+            async (shell) => {
+              const done = await expectEvent(shell, "done", REPORT_TIMEOUT_MS);
+              console.log(
+                `series: ${unit} round trip: opened ${String(done.opened)}, refused ${String(done.refused)}`,
+              );
+              await exitedCleanly(shell);
+            },
+          ),
+        editLaunch: (vault, plan, unit) =>
+          launch(
+            context,
+            vault,
+            {
+              mode: "edit",
+              items: plan.items.map(({ path, offset }) => ({ path, offset })),
+              text: context.parameters.at01EditText,
+              saveTimeoutMs: context.parameters.saveTimeoutMs,
+            },
+            unit,
+            async (shell) => {
+              const states: Record<string, number> = {};
+              for (;;) {
+                const event = await shell.next(REPORT_TIMEOUT_MS);
+                if (event.type === "ready-edit") {
+                  await typeInto(
+                    shell,
+                    context.parameters.at01EditText,
+                    context.parameters.at01KeyGapMs,
+                  );
+                } else if (event.type === "edited") {
+                  states[String(event.state)] = (states[String(event.state)] ?? 0) + 1;
+                } else if (event.type === "done") break;
+                else if (event.type !== "progress")
+                  throw new Error(`unexpected report ${event.type}`);
+              }
+              console.log(`series: ${unit} edit: save states ${JSON.stringify(states)}`);
+              await exitedCleanly(shell);
+            },
+          ),
+      },
+      interruptions,
+      context.streak,
+    );
+    if (roundTripSpec !== undefined) {
+      const body: RawBody = { kind: "round-trip", passes: series.roundTrip };
+      results.set(
+        roundTripSpec.id,
+        notMeasured(rawOf(roundTripSpec, body, interruptions, context.measuredWith)),
+      );
+    }
+    if (editSpec !== undefined) {
+      const body: RawBody = {
+        kind: "paragraph-edit",
+        editableFiles: series.editableFiles,
+        passes: series.edit,
+      };
+      results.set(
+        editSpec.id,
+        notMeasured(rawOf(editSpec, body, interruptions, context.measuredWith)),
+      );
+    }
+  } catch (error) {
+    if (error instanceof SeriesStopped) {
+      all({ kind: "unavailable", reason: error.message });
+      throw error;
+    }
+    all(unavailable(error));
   }
-  return { schema: RAW_SCHEMA, kind: "paragraph-edit", editableFiles, passes };
+  return results;
 }
 
+// ---- AT-02: one launch per configuration (PROTOCOL.md section 10.2).
 async function keystrokeLatency(
   spec: MeasureSpec,
   context: Context,
   noteIndex: number,
-): Promise<RawOutput> {
+  interruptions: Interruption[],
+): Promise<Made> {
   if (!context.trusted)
     throw new Unavailable("AXIsProcessTrusted() is false: system keystrokes are dropped");
-  const { vault, dispose } = freshVault(context.parameters);
-  try {
-    const count = context.cap(spec.count);
-    const plan: Plan = {
-      mode: "latency",
-      path: notePath(noteIndex),
-      cycle: context.parameters.at02TypedCycle,
-      count,
-      pauseMs: context.parameters.at02PauseMs,
-      timeoutMs: context.parameters.keystrokeTimeoutMs,
-      controlBlockMs: CONTROL_BLOCK_MS,
-    };
-    const samples = await withLaunch(context, vault, plan, async (shell) => {
-      const ready = await expectEvent(shell, "ready-control", REPORT_TIMEOUT_MS);
-      await typeInto(shell, String(ready.character));
-      const control = await expectEvent(shell, "control", REPORT_TIMEOUT_MS);
-      if (typeof control.latency !== "number" || control.latency < CONTROL_MINIMUM_MS) {
-        throw new Unavailable(
-          `start-bound control failed: ${String(control.latency)} ms for a 500 ms block`,
-        );
-      }
-      const values: (number | null)[] = [];
-      for (let k = 0; k < count; k += 1) {
-        const key = await expectEvent(shell, "ready-key", REPORT_TIMEOUT_MS);
-        await typeInto(shell, String(key.character));
-        const measured = await expectEvent(shell, "key", REPORT_TIMEOUT_MS);
-        const latency = measured.latency;
-        if (latency !== null && (typeof latency !== "number" || latency < 0)) {
-          throw new Error(`instrument error: latency ${String(latency)}`);
-        }
-        values.push(latency);
-      }
-      await expectEvent(shell, "done", REPORT_TIMEOUT_MS);
-      await exitedCleanly(shell);
-      return values;
-    });
-    return { schema: RAW_SCHEMA, kind: "latency", unit: "ms", samples };
-  } finally {
-    dispose();
-  }
-}
-
-async function firstOpening(spec: MeasureSpec, context: Context): Promise<RawOutput> {
-  const samples: number[] = [];
-  for (let launch = 0; launch < context.cap(spec.count); launch += 1) {
-    const { vault, dispose } = freshVault(context.parameters);
-    try {
-      const firstLine = decode(noteBytes(vault, LARGE_NOTE_INDEX)).split("\n")[0] ?? "";
-      const latency = await withLaunch(
-        context,
-        vault,
-        { mode: "open", path: notePath(LARGE_NOTE_INDEX), firstLine },
-        async (shell) => {
-          const open = await expectEvent(shell, "open", REPORT_TIMEOUT_MS);
-          await exitedCleanly(shell);
-          if (typeof open.latency !== "number" || open.latency < 0)
-            throw new Error("instrument error: open latency");
-          return open.latency;
-        },
-      );
-      samples.push(latency);
-      console.log(`series: nfr-03 launch ${launch}: ${latency.toFixed(2)} ms`);
-    } finally {
-      dispose();
-    }
-  }
-  return { schema: RAW_SCHEMA, kind: "latency", unit: "ms", samples };
-}
-
-async function residentMemory(spec: MeasureSpec, context: Context): Promise<RawOutput> {
-  const launches: { peakMib: number; samples: number }[] = [];
-  const period = context.parameters.nfr10SamplePeriodMs;
-  for (let launch = 0; launch < context.cap(spec.count); launch += 1) {
-    const { vault, dispose } = freshVault(context.parameters);
-    try {
-      const plan: Plan = {
-        mode: "memory",
-        path: notePath(LARGE_NOTE_INDEX),
-        holdMs: context.parameters.nfr10HoldMs,
-        marksTimeoutMs: context.parameters.saveTimeoutMs,
-      };
-      const reading = await withLaunch(context, vault, plan, async (shell, before) => {
-        let peakMib = 0;
-        let readings = 0;
-        // Read inside the sampler: an object, so the type is not narrowed to its initial null.
-        const reads: { locked: Rejection | null } = { locked: null };
-        const seen: ProcessTable = new Map();
-        let running = true;
-        const sampler = (async () => {
-          while (running) {
-            const table = readProcessTable();
-            if (!table.has(shell.pid)) break;
-            const helpers = [...table].filter(
-              ([pid, row]) =>
-                !before.has(pid) && (HELPER_NAMES as readonly string[]).includes(row.name),
+  const count = context.cap(spec.count);
+  const plan: Plan = {
+    mode: "latency",
+    path: notePath(noteIndex),
+    cycle: context.parameters.at02TypedCycle,
+    count,
+    pauseMs: context.parameters.at02PauseMs,
+    timeoutMs: context.parameters.keystrokeTimeoutMs,
+    controlBlockMs: CONTROL_BLOCK_MS,
+    frameIntervals: FRAME_PERIOD_INTERVALS,
+  };
+  const unit = `${spec.id} configuration`;
+  const made = await untilCompleted(
+    unit,
+    async () => {
+      const { vault, dispose } = freshVault(context.parameters);
+      try {
+        return await launch(context, vault, plan, unit, async (shell) => {
+          const frames = await framesOf(shell);
+          const ready = await expectEvent(shell, "ready-control", REPORT_TIMEOUT_MS);
+          await typeInto(shell, String(ready.character), 0);
+          const control = await expectEvent(shell, "control", REPORT_TIMEOUT_MS);
+          if (typeof control.latency !== "number" || control.latency < CONTROL_MINIMUM_MS) {
+            // PROTOCOL.md section 10.2: the series does not start, no other start bound is substituted.
+            throw new Unavailable(
+              `start-bound control failed: ${String(control.latency)} ms for a ${CONTROL_BLOCK_MS} ms block`,
             );
-            for (const [pid, row] of helpers) seen.set(pid, row);
-            peakMib = Math.max(peakMib, rssMib(table, [shell.pid, ...helpers.map(([pid]) => pid)]));
-            readings += 1;
-            reads.locked ??= rejection();
-            await Bun.sleep(period);
           }
-        })();
-        try {
-          await expectEvent(shell, "steady", REPORT_TIMEOUT_MS);
-          await expectEvent(shell, "done", REPORT_TIMEOUT_MS + context.parameters.nfr10HoldMs);
+          const samples: (number | null)[] = [];
+          const gapsMs: (number | null)[] = [];
+          for (let k = 0; k < count; k += 1) {
+            const key = await expectEvent(shell, "ready-key", REPORT_TIMEOUT_MS);
+            await typeInto(shell, String(key.character), 0);
+            const measured = await expectEvent(shell, "key", REPORT_TIMEOUT_MS);
+            const { latency, gap } = measured;
+            if (latency === null) {
+              samples.push(null);
+              gapsMs.push(null);
+              continue;
+            }
+            // A negative difference is an instrument error: the configuration is redone.
+            if (typeof latency !== "number" || latency < 0 || typeof gap !== "number" || gap < 0) {
+              throw new Interrupted(
+                "instrument-error",
+                `keystroke ${k}: latency ${String(latency)}, gap ${String(gap)}`,
+              );
+            }
+            samples.push(latency);
+            gapsMs.push(gap);
+          }
+          await expectEvent(shell, "done", REPORT_TIMEOUT_MS);
           await exitedCleanly(shell);
-        } finally {
-          running = false;
-          await sampler;
-        }
-        if (reads.locked !== null) return new Rejected(reads.locked);
-        return attributeHelpers(before, seen).ok
-          ? { peakMib, samples: readings }
-          : new Rejected("helpers-unattributed");
-      });
-      launches.push(reading);
-      console.log(
-        `series: nfr-10 launch ${launch}: peak ${reading.peakMib.toFixed(1)} Mio over ${reading.samples} readings`,
-      );
-    } finally {
-      dispose();
-    }
-  }
-  return { schema: RAW_SCHEMA, kind: "memory", unit: "Mio", launches };
+          return { samples, gapsMs, frames };
+        });
+      } finally {
+        dispose();
+      }
+    },
+    interruptions,
+    context.streak,
+  );
+  const observed = made.gapsMs.filter((gap): gap is number => gap !== null);
+  return {
+    body: { kind: "latency", unit: "ms", samples: made.samples, gapsMs: made.gapsMs },
+    framePeriods: [made.frames],
+    boundGap: summary(observed),
+  };
 }
 
-async function accessibility(_spec: MeasureSpec, context: Context): Promise<RawOutput> {
+// ---- NFR-03: first opening of the 1 MiB note (PROTOCOL.md section 10.3).
+async function firstOpening(
+  spec: MeasureSpec,
+  context: Context,
+  interruptions: Interruption[],
+): Promise<Made> {
+  const samples: (number | null)[] = [];
+  const callbacks: (number | null)[] = [];
+  const framePeriods: FramePeriod[] = [];
+  for (let index = 0; index < context.cap(spec.count); index += 1) {
+    const unit = `nfr-03 launch ${index}`;
+    const sample = await untilCompleted(
+      unit,
+      async () => {
+        const { vault, dispose } = freshVault(context.parameters);
+        try {
+          const lines = editorLines(decode(noteBytes(vault, LARGE_NOTE_INDEX)));
+          const plan: Plan = {
+            mode: "open",
+            path: notePath(LARGE_NOTE_INDEX),
+            firstLines: lines.slice(0, OPEN_PLAN_LINES),
+            lineCount: lines.length,
+            // Section 10.3: not observed 2 000 ms after the start bound, +oo, as a keystroke (section 5).
+            timeoutMs: context.parameters.keystrokeTimeoutMs,
+            frameIntervals: FRAME_PERIOD_INTERVALS,
+          };
+          return await launch(context, vault, plan, unit, async (shell) => {
+            const frames = await framesOf(shell);
+            const open = await expectEvent(shell, "open", REPORT_TIMEOUT_MS);
+            await exitedCleanly(shell);
+            if (open.latency === null && open.callbacks === null) {
+              return { latency: null, callbacks: null, frames };
+            }
+            if (
+              typeof open.latency !== "number" ||
+              open.latency < 0 ||
+              typeof open.callbacks !== "number"
+            ) {
+              throw new Interrupted(
+                "instrument-error",
+                `open latency ${String(open.latency)}, callbacks ${String(open.callbacks)}`,
+              );
+            }
+            return { latency: open.latency, callbacks: open.callbacks, frames };
+          });
+        } finally {
+          dispose();
+        }
+      },
+      interruptions,
+      context.streak,
+    );
+    samples.push(sample.latency);
+    callbacks.push(sample.callbacks);
+    framePeriods.push(sample.frames);
+    console.log(
+      `series: ${unit}: ${String(sample.latency)} ms after ${String(sample.callbacks)} callbacks`,
+    );
+  }
+  return {
+    body: { kind: "latency", unit: "ms", samples, callbacks },
+    framePeriods,
+    boundGap: null,
+  };
+}
+
+// ---- NFR-10: resident memory over a launch (PROTOCOL.md section 10.4).
+async function residentMemory(
+  spec: MeasureSpec,
+  context: Context,
+  interruptions: Interruption[],
+): Promise<Made> {
+  const launches: MemoryLaunch[] = [];
+  const plan: Plan = {
+    mode: "memory",
+    path: notePath(LARGE_NOTE_INDEX),
+    holdMs: context.parameters.nfr10HoldMs,
+    marksTimeoutMs: context.parameters.saveTimeoutMs,
+  };
+  for (let index = 0; index < context.cap(spec.count); index += 1) {
+    const unit = `nfr-10 launch ${index}`;
+    const launched = await untilCompleted(
+      unit,
+      async () => {
+        const { vault, dispose } = freshVault(context.parameters);
+        try {
+          return await launch(context, vault, plan, unit, async (shell, before) => {
+            let peakMib = 0;
+            // Read inside the sampler: an object, so the type is not narrowed to its initial null.
+            const reads: { cause: RejectionCause | null } = { cause: null };
+            const seen: ProcessTable = new Map();
+            let running = true;
+            const sampler = sampleOnDeadlines({
+              t0: shell.startedAt,
+              periodMs: context.parameters.nfr10SamplePeriodMs,
+              clock: realClock,
+              running: () => running,
+              read: () => {
+                const table = readProcessTable();
+                if (!table.has(shell.pid)) return false;
+                const helpers = [...table].filter(
+                  ([pid, row]) =>
+                    !before.has(pid) && (HELPER_NAMES as readonly string[]).includes(row.name),
+                );
+                for (const [pid, row] of helpers) seen.set(pid, row);
+                peakMib = Math.max(
+                  peakMib,
+                  rssMib(table, [shell.pid, ...helpers.map(([pid]) => pid)]),
+                );
+                reads.cause ??= rejection();
+                return true;
+              },
+            });
+            try {
+              await expectEvent(shell, "steady", REPORT_TIMEOUT_MS);
+              await expectEvent(shell, "done", REPORT_TIMEOUT_MS + context.parameters.nfr10HoldMs);
+              await exitedCleanly(shell);
+            } catch (error) {
+              running = false;
+              await sampler.catch(() => undefined);
+              throw error;
+            }
+            running = false;
+            const sampling = await sampler;
+            if (reads.cause !== null) return new Rejected(reads.cause);
+            if (!attributeHelpers(before, seen).ok) return new Rejected("helpers-unattributed");
+            const reading: MemoryLaunch = {
+              peakMib,
+              samples: sampling.readings,
+              missedTicks: sampling.missedTicks,
+              medianReadingMs: sampling.medianReadingMs,
+            };
+            return reading;
+          });
+        } finally {
+          dispose();
+        }
+      },
+      interruptions,
+      context.streak,
+    );
+    launches.push(launched);
+    console.log(
+      `series: ${unit}: peak ${launched.peakMib.toFixed(1)} Mio over ${launched.samples} readings, ${launched.missedTicks} deadlines skipped`,
+    );
+  }
+  return { body: { kind: "memory", unit: "Mio", launches }, framePeriods: [], boundGap: null };
+}
+
+// ---- Accessibility (PROTOCOL.md section 10.6).
+async function accessibility(context: Context, interruptions: Interruption[]): Promise<Made> {
   if (!context.trusted)
     throw new Unavailable("AXIsProcessTrusted() is false: the accessibility API refuses the read");
-  const { vault, dispose } = freshVault(context.parameters);
+  const unit = "accessibility launch";
+  const { read, reference } = await untilCompleted(
+    unit,
+    async () => {
+      const { vault, dispose } = freshVault(context.parameters);
+      try {
+        const text = decode(noteBytes(vault, LARGE_NOTE_INDEX));
+        return await launch(
+          context,
+          vault,
+          { mode: "accessibility", path: notePath(LARGE_NOTE_INDEX) },
+          unit,
+          async (shell) => {
+            await expectEvent(shell, "ready-ax", REPORT_TIMEOUT_MS);
+            return { read: readFocusedText(shell.pid), reference: text };
+          },
+        );
+      } finally {
+        dispose();
+      }
+    },
+    interruptions,
+    context.streak,
+  );
+  const { total, matching } = exposedProportion(reference, read.text);
+  console.log(
+    `series: accessibility ${read.role} via ${read.source}: ${matching}/${total} UTF-16 units`,
+  );
+  return {
+    body: { kind: "accessibility", role: read.role, total, matching },
+    framePeriods: [],
+    boundGap: null,
+  };
+}
+
+async function measureOne(spec: MeasureSpec, context: Context): Promise<Measured> {
+  const interruptions: Interruption[] = [];
   try {
-    const reference = decode(noteBytes(vault, LARGE_NOTE_INDEX));
-    const read = await withLaunch(
-      context,
-      vault,
-      { mode: "accessibility", path: notePath(LARGE_NOTE_INDEX) },
-      async (shell) => {
-        await expectEvent(shell, "ready-ax", REPORT_TIMEOUT_MS);
-        return readFocusedText(shell.pid);
-      },
-    );
-    const { total, matching } = exposedProportion(reference, read.text);
-    console.log(
-      `series: accessibility ${read.role} via ${read.source}: ${matching}/${total} UTF-16 units`,
-    );
-    return { schema: RAW_SCHEMA, kind: "accessibility", role: read.role, total, matching };
-  } finally {
-    dispose();
+    let made: Made;
+    switch (spec.id) {
+      case "at-02-5000-lines":
+        made = await keystrokeLatency(spec, context, LONG_NOTE_INDEX, interruptions);
+        break;
+      case "at-02-1-mib":
+        made = await keystrokeLatency(spec, context, LARGE_NOTE_INDEX, interruptions);
+        break;
+      case "nfr-03":
+        made = await firstOpening(spec, context, interruptions);
+        break;
+      case "nfr-10":
+        made = await residentMemory(spec, context, interruptions);
+        break;
+      case "accessibility":
+        made = await accessibility(context, interruptions);
+        break;
+      case "at-01-round-trip":
+      case "at-01-paragraph-edit":
+        throw new Error(`${spec.id} is made by the AT-01 passes`);
+    }
+    return {
+      raw: rawOf(spec, made.body, interruptions, context.measuredWith),
+      framePeriods: made.framePeriods,
+      boundGap: made.boundGap,
+    };
+  } catch (error) {
+    const raw = rawOf(spec, unavailable(error), interruptions, context.measuredWith);
+    if (error instanceof SeriesStopped) throw new StoppedWith(error, raw);
+    return notMeasured(raw);
   }
 }
 
-function measure(spec: MeasureSpec, context: Context): Promise<RawOutput> {
-  switch (spec.id) {
-    case "at-01-round-trip":
-      return roundTrip(spec, context);
-    case "at-01-paragraph-edit":
-      return paragraphEdit(spec, context);
-    case "at-02-5000-lines":
-      return keystrokeLatency(spec, context, LONG_NOTE_INDEX);
-    case "at-02-1-mib":
-      return keystrokeLatency(spec, context, LARGE_NOTE_INDEX);
-    case "nfr-03":
-      return firstOpening(spec, context);
-    case "nfr-10":
-      return residentMemory(spec, context);
-    case "accessibility":
-      return accessibility(spec, context);
+/** A stop of the series, with the raw output of the measure it interrupted. */
+class StoppedWith extends Error {
+  constructor(
+    readonly stop: SeriesStopped,
+    readonly raw: RawOutput,
+  ) {
+    super(stop.message);
   }
-}
-
-interface Options {
-  out: string;
-  trial: number | null;
-  only: string[] | null;
-  binary: string | null;
-}
-
-function options(argv: readonly string[]): Options {
-  const parsed: Options = { out: "", trial: null, only: null, binary: null };
-  for (let index = 0; index < argv.length; index += 2) {
-    const [name, value] = [argv[index], argv[index + 1]];
-    if (value === undefined) throw new Error(`${String(name)} needs a value`);
-    if (name === "--out") parsed.out = resolve(value);
-    else if (name === "--trial" && /^[1-9][0-9]*$/.test(value)) parsed.trial = Number(value);
-    else if (name === "--only") parsed.only = value.split(",");
-    else if (name === "--binary") parsed.binary = resolve(value);
-    else throw new Error(`unknown option ${String(name)}`);
-  }
-  if (parsed.out === "") throw new Error("--out DIR is required");
-  return parsed;
 }
 
 async function main(argv: readonly string[]): Promise<number> {
@@ -443,44 +623,87 @@ async function main(argv: readonly string[]): Promise<number> {
     console.error("series: unavailable: the shell runs on macOS (WKWebView)");
     return 2;
   }
-  const chosen = options(argv);
+  const chosen = parseOptions(argv);
   if (existsSync(chosen.out))
     throw new Error(`${chosen.out} exists: a report directory is written once`);
-  const protocol = readProtocol(REPOSITORY);
+  // The bytes the counts, thresholds and parameters are read from: their SHA-256
+  // goes into the manifest (PROTOCOL.md section 10.8).
+  const protocolBytes = new Uint8Array(readFileSync(join(REPOSITORY, PROTOCOL_RELATIVE_PATH)));
+  const protocol = new TextDecoder("utf-8", { fatal: true }).decode(protocolBytes);
   const parameters = seriesParameters(protocol);
   const specs = measureSpecs(protocol).filter(
     (spec) => chosen.only === null || chosen.only.includes(spec.id),
   );
-  const trial = chosen.trial !== null || chosen.only !== null;
+  const trial = isTrial(chosen);
   const commit = git(["rev-parse", "HEAD"]);
   if (!trial && git(["status", "--porcelain"]) !== "") {
     throw new Error("the working tree is not clean: the binary would not be the commit it names");
   }
+  // PROTOCOL.md section 10.4: no other application using WebKit is open during the series.
+  const foreign = webKitHelpers(readProcessTable());
+  if (foreign.length > 0) {
+    const message = `${foreign.length} WebKit helper process(es) already run (pids ${foreign.join(", ")}): close the application that uses WebKit`;
+    if (!trial) throw new Error(message);
+    console.log(`series: trial despite: ${message}`);
+  }
   const machine = detectMachine(REPOSITORY, parameters.machineClass);
+  const binary = chosen.binary ?? buildSeriesBinary(REPOSITORY);
   const context: Context = {
     parameters,
-    binary: chosen.binary ?? buildSeriesBinary(REPOSITORY),
+    binary,
+    // PROTOCOL.md section 10.7: the binary and the instrument of every sample of this run.
+    measuredWith: measuredWithOf(binary, commit, SCRIPT_SHA256),
     trusted: accessibilityTrusted(),
     cap: (count) => (chosen.trial === null ? count : Math.min(count, chosen.trial)),
     rejected: { "session-locked": 0, "display-asleep": 0, "helpers-unattributed": 0 },
+    streak: new Streak(),
   };
   console.log(
-    `series: machine ${machine.class}, commit ${commit}, accessibility trusted ${context.trusted}`,
+    `series: machine ${machine.class}, commit ${commit}, trial ${trial}, accessibility trusted ${context.trusted}`,
   );
   mkdirSync(join(chosen.out, "raw"), { recursive: true });
+  const byId = (id: MeasureId) => specs.find((spec) => spec.id === id);
+  const results = new Map<MeasureId, Measured>();
+  let stopped: SeriesStop | null = null;
+  const stopWith = (error: SeriesStopped) => {
+    stopped = { cause: error.cause, defect: defectOf(error.cause), unit: error.unit };
+    console.log(`series: ${error.message}, a defect of the ${defectOf(error.cause)}; no verdict`);
+  };
+  try {
+    for (const [id, measured] of await at01(
+      byId("at-01-round-trip"),
+      byId("at-01-paragraph-edit"),
+      context,
+    )) {
+      results.set(id, measured);
+    }
+  } catch (error) {
+    if (!(error instanceof SeriesStopped)) throw error;
+    stopWith(error);
+  }
   const measures: MeasureEntry[] = [];
   for (const spec of specs) {
-    let raw: RawOutput;
-    try {
-      raw = await measure(spec, context);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      console.log(`series: ${spec.id}: unavailable: ${reason}`);
-      raw = { schema: RAW_SCHEMA, kind: "unavailable", reason };
+    let measured = results.get(spec.id);
+    if (measured === undefined && stopped === null) {
+      try {
+        measured = await measureOne(spec, context);
+      } catch (error) {
+        if (!(error instanceof StoppedWith)) throw error;
+        stopWith(error.stop);
+        measured = notMeasured(error.raw);
+      }
     }
+    measured ??= notMeasured(
+      rawOf(
+        spec,
+        { kind: "unavailable", reason: "the series stopped before this measure" },
+        [],
+        context.measuredWith,
+      ),
+    );
     const path = `raw/${spec.id}.json`;
-    writeFileSync(join(chosen.out, path), `${JSON.stringify(raw, null, 2)}\n`);
-    const evaluation = evaluate(spec, raw);
+    writeFileSync(join(chosen.out, path), `${JSON.stringify(measured.raw, null, 2)}\n`);
+    const evaluation = evaluate(spec, measured.raw);
     measures.push({
       id: spec.id,
       measure: spec.measure,
@@ -488,21 +711,25 @@ async function main(argv: readonly string[]): Promise<number> {
       raw: path,
       value: evaluation.ok ? toJsonValue(evaluation.value) : null,
       verdict: evaluation.ok ? evaluation.verdict : "fail",
+      framePeriods: measured.framePeriods,
+      boundGap: measured.boundGap,
     });
     console.log(
       `series: ${spec.id}: ${evaluation.ok ? `${evaluation.verdict} (${evaluation.value})` : `incomplete (${evaluation.issue})`}`,
     );
   }
-  const manifest: ReportManifest = {
-    schema: MANIFEST_SCHEMA,
+  const manifest = manifestOf({
     trial,
     commit,
-    createdAt: new Date().toISOString(),
     machine,
     corpusSha256: parameters.corpusSha256,
+    protocolBytes,
+    measuredWith: context.measuredWith,
     rejectedLaunches: context.rejected,
+    stopped,
     measures,
-  };
+    createdAt: new Date(),
+  });
   writeFileSync(join(chosen.out, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(
     `series: ${measures.length} measure(s) written to ${chosen.out}; rejected launches ${JSON.stringify(context.rejected)}`,

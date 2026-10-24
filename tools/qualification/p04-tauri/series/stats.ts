@@ -24,6 +24,24 @@ export function nearestRankP95(samples: readonly Sample[]): number {
   return value;
 }
 
+/**
+ * Count, nearest-rank p50 and p95 and maximum of finite values (sections 4 and
+ * 10.1): the summary of the gaps between the observation of a change and its
+ * end bound. Null for no value: an empty summary is not a summary of zeros.
+ */
+export function summary(
+  values: readonly number[],
+): { count: number; p50Ms: number; p95Ms: number; maxMs: number } | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = (q: number): number => {
+    const value = sorted[Math.ceil(q * sorted.length) - 1];
+    if (value === undefined) throw new Error("rank outside the sample");
+    return value;
+  };
+  return { count: sorted.length, p50Ms: rank(0.5), p95Ms: rank(0.95), maxMs: rank(1) };
+}
+
 export function maximum(samples: readonly number[]): number {
   if (samples.length === 0) throw new Error("maximum of an empty sample");
   return samples.reduce((largest, sample) => (sample > largest ? sample : largest));

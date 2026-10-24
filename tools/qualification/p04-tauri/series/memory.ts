@@ -52,6 +52,17 @@ export function attributeHelpers(before: ProcessTable, after: ProcessTable): Att
   return pids.length === HELPER_NAMES.length ? { ok: true, pids } : { ok: false, found };
 }
 
+/**
+ * The WebKit helpers of `table`: read before the series, they are another
+ * application using WebKit, which PROTOCOL.md section 10.4 excludes (it would
+ * make helpers of the same names during a launch and break the attribution).
+ */
+export function webKitHelpers(table: ProcessTable): number[] {
+  return [...table]
+    .filter(([, row]) => (HELPER_NAMES as readonly string[]).includes(row.name))
+    .map(([pid]) => pid);
+}
+
 /** Sum of the RSS of `pids`, in Mio (1 Mio = 1 024 KiB). A pid absent from the table is an error. */
 export function rssMib(table: ProcessTable, pids: readonly number[]): number {
   let kib = 0;

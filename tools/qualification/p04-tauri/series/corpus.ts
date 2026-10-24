@@ -35,6 +35,14 @@ export function digestDirectory(root: string): { sha256: string; fileCount: numb
   return corpusDigest(files);
 }
 
+/**
+ * The lines of a note as the editor holds them: CodeMirror splits on "\r\n",
+ * "\r" and "\n", and a final line break leaves an empty last line.
+ */
+export function editorLines(text: string): string[] {
+  return text.split(/\r\n|\r|\n/);
+}
+
 export interface EditItem {
   path: string;
   paragraph: ByteRange;

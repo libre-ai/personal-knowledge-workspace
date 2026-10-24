@@ -8,6 +8,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { LARGE_NOTE_INDEX, LONG_NOTE_INDEX, notePath } from "../cr10k";
 import { protocolFields, protocolThresholds } from "../protocol-fields";
 
 export const PROTOCOL_RELATIVE_PATH = "tools/qualification/p04-tauri/PROTOCOL.md";
@@ -33,6 +34,7 @@ export interface SeriesParameters {
   readonly nfr10SamplePeriodMs: number;
   readonly nfr10HoldMs: number;
   readonly saveTimeoutMs: number;
+  readonly at01KeyGapMs: number;
 }
 
 function field(fields: ReadonlyMap<string, string>, key: string): string {
@@ -73,6 +75,7 @@ export function seriesParameters(markdown: string): SeriesParameters {
     nfr10SamplePeriodMs: integer(fields, "nfr-10-sample-period-ms"),
     nfr10HoldMs: integer(fields, "nfr-10-hold-ms"),
     saveTimeoutMs: integer(fields, "save-timeout-ms"),
+    at01KeyGapMs: integer(fields, "at-01-key-gap-ms"),
   };
 }
 
@@ -97,7 +100,18 @@ export interface MeasureSpec {
   readonly count: number;
   /** ms for a latency, Mio for memory, % for a share; the number of corpus files for AT-01. */
   readonly limit: number;
+  /** The corpus note the measure is made on (PROTOCOL.md section 10); null for AT-01, made on every file. */
+  readonly note: string | null;
+  /** The launches that read a frame period at their start (section 10.1): 1 per AT-02 configuration, 1 per NFR-03 sample, 0 elsewhere. */
+  readonly framedLaunches: number;
 }
+
+/**
+ * Section 10.1: "600 intervalles entre rappels requestAnimationFrame successifs".
+ * The number is in the prose of the protocol, not in its field table;
+ * `protocol.test.ts` checks that the prose still says it.
+ */
+export const FRAME_PERIOD_INTERVALS = 600;
 
 function limitOf(threshold: string, pattern: RegExp, measure: string): number {
   const value = pattern.exec(threshold)?.[1];
@@ -113,7 +127,7 @@ export function measureSpecs(markdown: string): MeasureSpec[] {
   const specs: MeasureSpec[] = [];
   for (const { measure, threshold } of protocolThresholds(markdown)) {
     const latency = /^p95 ≤ ([0-9]+) ms$/;
-    let spec: Omit<MeasureSpec, "measure" | "threshold">;
+    let spec: Omit<MeasureSpec, "measure" | "threshold" | "note" | "framedLaunches">;
     if (measure.startsWith("AT-01, aller-retour")) {
       if (!threshold.startsWith("100 % des 10 000 fichiers"))
         throw new Error(`PROTOCOL.md: threshold of ${measure} has an unexpected form`);
@@ -170,7 +184,14 @@ export function measureSpecs(markdown: string): MeasureSpec[] {
     }
     if (specs.some((known) => known.id === spec.id))
       throw new Error(`PROTOCOL.md: two threshold rows map to ${spec.id}`);
-    specs.push({ ...spec, measure, threshold });
+    const note =
+      spec.kind === "round-trip" || spec.kind === "paragraph-edit"
+        ? null
+        : notePath(spec.id === "at-02-5000-lines" ? LONG_NOTE_INDEX : LARGE_NOTE_INDEX);
+    // Section 10.1: the frame period is read at the start of each launch of AT-02
+    // (one per configuration) and of NFR-03 (one per sample), and of no other.
+    const framedLaunches = spec.id.startsWith("at-02") ? 1 : spec.id === "nfr-03" ? spec.count : 0;
+    specs.push({ ...spec, measure, threshold, note, framedLaunches });
   }
   return specs;
 }
