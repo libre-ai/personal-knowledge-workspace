@@ -21,7 +21,17 @@ path = "src/main.rs"
 name = "shell_controls"
 harness = false
 
+# Test support for the editor's Playwright run (CA-41): the bridge of the shell on
+# the mock runtime, behind a loopback HTTP port. A port is exactly what the shell
+# must never open (control C6), so the binary exists only under the feature below,
+# which `default` never enables; `tests/editor/harness.test.ts` pins both.
+[[bin]]
+name = "e2e-harness"
+path = "src/bin/e2e_harness.rs"
+required-features = ["e2e-harness"]
+
 [features]
+e2e-harness = ["tauri/test"]
 # Production behaviour is the only behaviour: `frontendDist` is embedded in the
 # binary and served through the private scheme, and `devUrl` is never read. It is
 # the default so that no build, test or qualification run exercises a different
