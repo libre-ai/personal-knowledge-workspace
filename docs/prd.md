@@ -237,8 +237,9 @@ ADR-0044. Ces amendements sont faits : ce document ne porte plus de position, il
 ## 10. Paquets de travail
 
 Le tableau ci-dessous est limité au jalon ouvert par ADR-0057 pour P04 : protocole de mesure,
-coquille, pont, éditeur, série de mesures, qualification macOS. Les critères qu'il cite sont ceux
-du cahier § 8 déclarés `[état : à construire]` pour ce jalon (CA-34 à CA-47) ; les autres critères
+coquille, pont, éditeur, harnais de la série, arbre d'accessibilité, série de mesures, qualification
+macOS. Les critères qu'il cite sont ceux
+du cahier § 8 déclarés `[état : à construire]` pour ce jalon (CA-34 à CA-49) ; les autres critères
 ne sont pas découpés ici. Au 2026-10-23, CA-3 à CA-6, CA-9 à CA-12 et CA-17 sont verts ; CA-1, CA-2,
 CA-8, CA-14 et CA-32 sont rouges, CA-7 et CA-13 partiels, CA-15, CA-16 et CA-31 à construire, sans
 paquet dans ce jalon (rejouer `grep -n 'état :' docs/cahier-des-charges.md`).
@@ -246,7 +247,10 @@ paquet dans ce jalon (rejouer `grep -n 'état :' docs/cahier-des-charges.md`).
 Ordre : le paquet WP-1 précède toute mesure (le protocole et le corpus sont commités avant la
 première mesure, `INVARIANTS:14`, I-08) ; les paquets WP-2, WP-3 et WP-4 construisent la coquille,
 le pont et l'éditeur, dans cet ordre de dépendance, sans attendre la série (`ADR-0057:52`,
-arbitrage 3 : « Pas bloquant, go Tauri ») ; le paquet WP-5 rejoue la série dans la coquille
+arbitrage 3 : « Pas bloquant, go Tauri ») ; le paquet WP-7 construit le harnais de la série sans
+rien mesurer et écrit dans la fiche le plafond de mémoire exigé par CA-46 avant toute mesure, et le
+paquet WP-8 construit l'arbre d'accessibilité de l'éditeur (EF-P04-11), tous deux avant WP-5
+(décisions du propriétaire du 2026-10-24) ; le paquet WP-5 rejoue la série dans la coquille
 construite et commite le rapport ; le paquet WP-6 qualifie sur macOS et met la fiche à jour, avec
 pour critère de sortie « série du paquet WP-5 verte ».
 
@@ -260,7 +264,7 @@ accès au système de fichiers). Les scripts `check:p04-shell`, `check:p04-bridg
 `check:p04-editor` sont ajoutés à `package.json` par les paquets qui les citent ; chacun enchaîne
 les tests Rust et Bun nommés par ses critères.
 
-Portes : les paquets WP-1 à WP-5 sont `two-way` (code, tests, corpus et rapport se défont par une
+Portes : les paquets WP-1 à WP-5, WP-7 et WP-8 sont `two-way` (code, tests, corpus et rapport se défont par une
 pull request ; aucune dépendance de flotte, aucun acte du propriétaire). Le paquet WP-6 est
 `one-way` : la signature `codesign` engage un certificat Developer ID du compte Apple Developer du
 propriétaire, la notarisation soumet l'empreinte du binaire à Apple et le ticket émis n'est pas
@@ -274,4 +278,6 @@ flotte.
 | `WP-3` | `CA-39`, `CA-40` | `crates/notebook-vault/**`, `apps/desktop/src-tauri/src/**`, `apps/desktop/src/bridge/**`, `apps/desktop/tests/bridge/**`, `Cargo.toml`, `Cargo.lock`, `deny.toml`, `package.json` | `bun run check:p04-bridge` | `two-way` |
 | `WP-4` | `CA-41`, `CA-42`, `CA-47` | `apps/desktop/src/**`, `apps/desktop/e2e/**`, `apps/desktop/tests/editor/**`, `apps/desktop/tests/shell/**`, `apps/desktop/tests/bridge/**`, `apps/desktop/src-tauri/src/**`, `apps/desktop/src-tauri/build.rs`, `apps/desktop/src-tauri/capabilities/**`, `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/package.json`, `apps/desktop/DEPENDENCIES.md`, `apps/desktop/playwright.config.ts`, `Cargo.toml`, `Cargo.lock`, `deny.toml`, `bun.lock`, `package.json` | `bun run check:p04-editor` | `two-way` |
 | `WP-5` | `CA-43`, `CA-44` | `tools/qualification/p04-tauri/reports/**`, `docs/apps/p04-tauri-qualification.md` | `bun tools/qualification/p04-tauri/check-report.ts` | `two-way` |
+| `WP-7` | `CA-48` | `tools/qualification/p04-tauri/series/**`, `tools/qualification/p04-tauri/check-report.ts`, `tools/qualification/p04-tauri/check-report.test.ts`, `apps/desktop/src-tauri/examples/**`, `project.v1.yaml`, `package.json` | `bun test tools/qualification/p04-tauri` | `two-way` |
+| `WP-8` | `CA-49` | `apps/desktop/src/editor/**`, `apps/desktop/e2e/**`, `apps/desktop/tests/editor/**` | `bun run check:p04-editor` | `two-way` |
 | `WP-6` | `CA-45`, `CA-46` | `.github/workflows/p04-desktop-macos.yml`, `apps/desktop/src-tauri/entitlements.plist`, `project.v1.yaml`, `README.md`, `README.fr.md` | `gh run list -R libre-ai/personal-knowledge-workspace --workflow p04-desktop-macos.yml --limit 1 --json conclusion` | `one-way` |
