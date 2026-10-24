@@ -11,7 +11,7 @@ P04 est la coquille Tauri 2 et l'éditeur CodeMirror 6 d'ADR-0057 ; treize crit�
 pour le jalon ouvert par ADR-0057. Les critères de la mission conservés gardent leur numéro, soit
 les critères CA-1 à CA-17, CA-31 et CA-32 ; les numéros de la mission qui portaient P02, soit les
 numéros de CA-18 à CA-30 et le numéro CA-33, ne sont pas réutilisés, pour que chaque numéro
-désigne la même chose ici et dans la mission ; les critères ajoutés vont de CA-34 à CA-46.
+désigne la même chose ici et dans la mission ; les critères ajoutés vont de CA-34 à CA-47.
 Réécritures de forme exigées par la norme des
 paquets de travail de `libre-ai/project-governance` (`docs/specifications/WORK-PACKAGES.md`) :
 chaque paramètre écrit entre chevrons dans la mission est écrit en capitales (`SHA`, `ORG/DEPOT`,
@@ -355,7 +355,7 @@ Chaque critère porte un préfixe d'état au SHA lu : `[état : vert]` = test ou
 statique ; `[état : à construire]` = code, corpus ou instrument absent du SHA ; `[état : partiel]`
 = une partie du critère est à construire. Décompte :
 `grep -cE '^- CA-[0-9]+ \[état : à construire\]' docs/cahier-des-charges.md`, et de même pour
-`rouge`, `vert`, `partiel`. Les critères CA-34 à CA-46 sont ceux du jalon ouvert par ADR-0057 et
+`rouge`, `vert`, `partiel`. Les critères CA-34 à CA-47 sont ceux du jalon ouvert par ADR-0057 et
 sont découpés en paquets de travail dans `prd.md` § 10.
 
 Transverses au dépôt :
@@ -576,6 +576,22 @@ P04, jalon ADR-0057 — qualification macOS et fiche (paquet WP-6) :
   `git log --diff-filter=A --format=%ct -- tools/qualification/p04-tauri/reports` postérieur au
   commit qui ajoute `500 Mio` à la fiche (`git log -S'500 Mio' --format=%ct -- project.v1.yaml`) ;
   `check-inventory-drift` de `project-governance` vert.
+- CA-47 [état : à construire] **Le front ne nomme pas le dossier du coffre** (frontière de confiance
+  du pont, EF-P04-9 ; décision du propriétaire du 2026-10-23 sur le constat de relecture de WP-3 :
+  garde-fou dans WP-3, frontière dans WP-4). Aucune commande du pont ne reçoit du front un chemin
+  de racine : le dossier du coffre est choisi côté Rust, par un sélecteur de dossier natif dont le
+  résultat est mémorisé par le processus, et chaque commande du pont opère sur cette racine seule ;
+  la racine est injectable dans les tests, le sélecteur natif ne s'automatisant pas. L'événement
+  `vault_changed` est écoutable par le front sans élargir la capacité au-delà d'une permission
+  nommée et énumérée, et le gate de dérive des contrôles de la coquille (C5) est amendé avec la
+  capacité dans le même changement. Validation :
+  `cargo test --locked -p libre-ai-p04-desktop bridge` (une commande qui reçoit un chemin de racine
+  dans sa charge utile le refuse par un code `vault.*` fermé ; sans racine choisie, toute commande
+  refuse ; la racine choisie ne change pas pendant la session) et `bun run check:p04-shell` vert
+  avec le gate C5 amendé ; vecteur rouge : une commande qui accepte à nouveau un chemin de racine
+  vue rouge (substitution par une version qui l'accepte) ; les vecteurs du garde-fou de WP-3
+  (racine du disque, répertoires système, chemin hors du dossier personnel, dossier caché) sont
+  conservés.
 
 ## 9. Critères d'abandon
 
