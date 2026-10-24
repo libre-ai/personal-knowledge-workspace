@@ -70,6 +70,13 @@ export interface FrontReport {
  * - `@codemirror/*` (state, view, commands): the editor of EF-P04-10, which edits text
  *   and parses none of it; `lang-markdown` and `@lezer/markdown` stay out (the preview
  *   comes from `render_preview`).
+ *
+ * WP-4 (CA-41, CA-42) uses exactly these four and keeps the list closed on them:
+ * `@codemirror/autocomplete` (closing brackets, completions) and `@codemirror/language`
+ * (indent on input) insert text the user did not type, and `@codemirror/search` adds no
+ * need of the editor. `tests/editor/dependencies.test.ts` pins the four names and refuses
+ * each of those as a dependency and as an import. The transitive packages that come with
+ * `@codemirror/commands` are recorded in `DEPENDENCIES.md`; nothing in `src/` imports them.
  */
 export const ALLOWED_DEPENDENCIES: readonly string[] = [
   "@tauri-apps/api",

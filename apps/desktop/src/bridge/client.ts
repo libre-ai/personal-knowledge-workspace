@@ -140,8 +140,12 @@ function encodePath(path: string): string {
 }
 
 export interface Bridge {
-  /** Opens the folder (an absolute path) as the vault; replaces the previous one. */
-  openVault(path: string): Promise<void>;
+  /**
+   * Asks the shell to show its native folder dialog and make the folder the
+   * root of the session. The front never names the folder (CA-47): there is no
+   * argument to carry one, and the root cannot be changed once chosen.
+   */
+  chooseVault(): Promise<void>;
   /** The exact bytes of the note and their revision. */
   readNote(path: string): Promise<NoteRead>;
   /**
@@ -157,8 +161,8 @@ export interface Bridge {
 
 export function createBridge(invoke: Invoke): Bridge {
   return {
-    async openVault(path) {
-      await send(invoke, "open_vault", { path });
+    async chooseVault() {
+      await send(invoke, "choose_vault", {});
     },
 
     async readNote(path) {

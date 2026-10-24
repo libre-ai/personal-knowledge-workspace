@@ -1,0 +1,59 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Libre AI contributors
+ * SPDX-License-Identifier: EUPL-1.2
+ *
+ * The page. Colours are tokens: nothing below names a colour except these
+ * variables. The editor lives in a shadow root and takes its rules from
+ * `editor/styles.ts` (the CSP refuses an inline <style>); it inherits the tokens.
+ */
+
+:root {
+  color-scheme: light dark;
+  --surface: Canvas;
+  --text: CanvasText;
+  --muted: GrayText;
+  --border: color-mix(in srgb, CanvasText 25%, Canvas);
+  --accent: LinkText;
+  --mark-quote: color-mix(in srgb, CanvasText 8%, Canvas);
+  --mark-code: color-mix(in srgb, CanvasText 12%, Canvas);
+  --alert: color-mix(in srgb, red 70%, CanvasText);
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+
+#app {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+header,
+form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+form[hidden] {
+  display: none;
+}
+
+#editor {
+  display: block;
+}
+
+#save-state,
+#vault-status {
+  color: var(--muted);
+}
+
+#problem {
+  color: var(--alert);
+}

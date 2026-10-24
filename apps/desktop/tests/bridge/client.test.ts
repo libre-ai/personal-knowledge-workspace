@@ -88,24 +88,32 @@ describe("the names are the ones of the shared wire contract", () => {
     ) as {
       permissions: string[];
     };
+    // `allow-<command>` opens a command; the one plugin permission is the event
+    // listener of CA-47 (judged by `tests/shell/config.test.ts`), not a command.
     const permitted = capability.permissions
+      .filter((p) => p.startsWith("allow-"))
       .map((p) => p.replace(/^allow-/, "").replaceAll("-", "_"))
       .filter((name) => name !== "shell_ping");
     expect([...permitted].sort()).toEqual([...wire.commands].sort());
+    expect(capability.permissions.filter((p) => !p.startsWith("allow-"))).toEqual([
+      "core:event:allow-listen",
+    ]);
   });
 });
 
 describe("what the client sends", () => {
-  test("open_vault, search and rebuild_index send JSON arguments", async () => {
+  test("choose_vault carries no argument: the front cannot name a folder (CA-47)", async () => {
     const { invoke, calls } = recorder(null);
     const bridge = createBridge(invoke);
-    await bridge.openVault("/tmp/vault");
-    expect(calls.at(-1)).toEqual({
-      command: "open_vault",
-      args: { path: "/tmp/vault" },
-      options: undefined,
-    });
+    // `chooseVault` declares no parameter; the cast proves a caller that passes
+    // one still sends none, and that the old command does not exist.
+    await (bridge.chooseVault as (path?: string) => Promise<void>)("/tmp/vault");
+    expect(calls).toEqual([{ command: "choose_vault", args: {}, options: undefined }]);
+    expect(BRIDGE_COMMANDS as readonly string[]).not.toContain("open_vault");
+    expect(Object.keys(bridge)).not.toContain("openVault");
+  });
 
+  test("search and rebuild_index send JSON arguments", async () => {
     const searching = recorder([{ path: "a.md", score: 2 }]);
     expect(await createBridge(searching.invoke).search("alpha beta")).toEqual([
       { path: "a.md", score: 2 },
@@ -246,7 +254,7 @@ describe("refusals", () => {
         throw rejection;
       };
       const outcome = await createBridge(invoke)
-        .openVault("/x")
+        .chooseVault()
         .catch((e) => e);
       expect(outcome).toBeInstanceOf(BridgeFailure);
       expect((outcome as Error).message).toBe("bridge.failure");

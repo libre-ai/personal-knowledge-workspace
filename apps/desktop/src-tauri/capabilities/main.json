@@ -1,15 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Rights of the front: one entry per command of build.rs, nothing else.",
+  "description": "Rights of the front: one entry per command of build.rs, plus core:event:allow-listen so that it can listen to vault_changed (CA-47). Nothing else.",
   "windows": ["main"],
   "permissions": [
     "allow-shell-ping",
-    "allow-open-vault",
+    "allow-choose-vault",
     "allow-read-note",
     "allow-write-note",
     "allow-render-preview",
     "allow-search",
-    "allow-rebuild-index"
+    "allow-rebuild-index",
+    "core:event:allow-listen"
   ]
 }

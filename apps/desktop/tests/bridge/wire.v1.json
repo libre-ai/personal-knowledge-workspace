@@ -1,7 +1,7 @@
 {
   "schemaVersion": "p04-bridge-wire.v1",
   "commands": [
-    "open_vault",
+    "choose_vault",
     "read_note",
     "write_note",
     "render_preview",
@@ -26,6 +26,7 @@
     "vault.index_missing",
     "vault.io",
     "vault.not_open",
-    "vault.invalid_request"
+    "vault.invalid_request",
+    "vault.already_open"
   ]
 }
