@@ -238,7 +238,7 @@ ADR-0044. Ces amendements sont faits : ce document ne porte plus de position, il
 
 Le tableau ci-dessous est limité au jalon ouvert par ADR-0057 pour P04 : protocole de mesure,
 coquille, pont, éditeur, série de mesures, qualification macOS. Les critères qu'il cite sont ceux
-du cahier § 8 déclarés `[état : à construire]` pour ce jalon (CA-34 à CA-46) ; les autres critères
+du cahier § 8 déclarés `[état : à construire]` pour ce jalon (CA-34 à CA-47) ; les autres critères
 ne sont pas découpés ici. Au 2026-10-23, CA-3 à CA-6, CA-9 à CA-12 et CA-17 sont verts ; CA-1, CA-2,
 CA-8, CA-14 et CA-32 sont rouges, CA-7 et CA-13 partiels, CA-15, CA-16 et CA-31 à construire, sans
 paquet dans ce jalon (rejouer `grep -n 'état :' docs/cahier-des-charges.md`).
@@ -272,6 +272,6 @@ flotte.
 | `WP-1` | `CA-34`, `CA-35`, `CA-36` | `tools/qualification/p04-tauri/**` | `bun test tools/qualification/p04-tauri` | `two-way` |
 | `WP-2` | `CA-37`, `CA-38` | `apps/desktop/src-tauri/**`, `apps/desktop/tests/shell/**`, `apps/desktop/package.json`, `apps/desktop/index.html`, `apps/desktop/tsconfig.json`, `Cargo.toml`, `Cargo.lock`, `deny.toml`, `package.json`, `bun.lock` | `bun run check:p04-shell` | `two-way` |
 | `WP-3` | `CA-39`, `CA-40` | `crates/notebook-vault/**`, `apps/desktop/src-tauri/src/**`, `apps/desktop/src/bridge/**`, `apps/desktop/tests/bridge/**`, `Cargo.toml`, `Cargo.lock`, `deny.toml`, `package.json` | `bun run check:p04-bridge` | `two-way` |
-| `WP-4` | `CA-41`, `CA-42` | `apps/desktop/src/**`, `apps/desktop/e2e/**`, `apps/desktop/tests/editor/**`, `apps/desktop/package.json`, `apps/desktop/DEPENDENCIES.md`, `apps/desktop/playwright.config.ts`, `bun.lock`, `package.json` | `bun run check:p04-editor` | `two-way` |
+| `WP-4` | `CA-41`, `CA-42`, `CA-47` | `apps/desktop/src/**`, `apps/desktop/e2e/**`, `apps/desktop/tests/editor/**`, `apps/desktop/tests/shell/**`, `apps/desktop/tests/bridge/**`, `apps/desktop/src-tauri/src/**`, `apps/desktop/src-tauri/build.rs`, `apps/desktop/src-tauri/capabilities/**`, `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/package.json`, `apps/desktop/DEPENDENCIES.md`, `apps/desktop/playwright.config.ts`, `Cargo.toml`, `Cargo.lock`, `deny.toml`, `bun.lock`, `package.json` | `bun run check:p04-editor` | `two-way` |
 | `WP-5` | `CA-43`, `CA-44` | `tools/qualification/p04-tauri/reports/**`, `docs/apps/p04-tauri-qualification.md` | `bun tools/qualification/p04-tauri/check-report.ts` | `two-way` |
 | `WP-6` | `CA-45`, `CA-46` | `.github/workflows/p04-desktop-macos.yml`, `apps/desktop/src-tauri/entitlements.plist`, `project.v1.yaml`, `README.md`, `README.fr.md` | `gh run list -R libre-ai/personal-knowledge-workspace --workflow p04-desktop-macos.yml --limit 1 --json conclusion` | `one-way` |
