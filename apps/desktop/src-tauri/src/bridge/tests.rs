@@ -1113,3 +1113,47 @@ fn bridge_two_choices_at_once_open_one_dialog() {
     assert_eq!(first.join().unwrap().unwrap(), Value::Null);
     assert_eq!(asked.load(Ordering::SeqCst), 1);
 }
+
+/// Whether the ACL of the shell refused `command` for the window `main`, as
+/// opposed to the command having run (whatever it then answered).
+fn refused_by_the_acl(shell: &Shell, command: &str, args: Value) -> bool {
+    call(&shell.main, command, InvokeBody::Json(args), &[])
+        .err()
+        .is_some_and(|error| error.to_string().contains("not allowed"))
+}
+
+#[test]
+fn bridge_the_front_may_listen_to_events_and_do_nothing_else_with_them() {
+    let shell = shell();
+    let listen = json!({ "event": VAULT_CHANGED, "target": { "kind": "Any" }, "handler": 0 });
+    assert!(
+        !refused_by_the_acl(&shell, "plugin:event|listen", listen),
+        "listen is refused by the ACL: the front cannot hear vault_changed"
+    );
+    let mut refused = 0;
+    for (command, args) in [
+        (
+            "plugin:event|emit",
+            json!({ "event": VAULT_CHANGED, "payload": null }),
+        ),
+        (
+            "plugin:event|emit_to",
+            json!({ "target": { "kind": "Any" }, "event": VAULT_CHANGED, "payload": null }),
+        ),
+        (
+            "plugin:event|unlisten",
+            json!({ "event": VAULT_CHANGED, "eventId": 0 }),
+        ),
+        ("plugin:window|close", json!({ "label": "main" })),
+        ("plugin:webview|webview_close", json!({ "label": "main" })),
+    ] {
+        assert!(
+            refused_by_the_acl(&shell, command, args),
+            "{command} is not refused by the ACL"
+        );
+        refused += 1;
+    }
+    println!(
+        "bridge: event listen served, {refused} other event, window or webview commands refused"
+    );
+}

@@ -14,6 +14,7 @@ import {
   type Capability,
   type Control,
   checkShell,
+  ENUMERATED_PLUGIN_PERMISSIONS,
   type Json,
   readShellFiles,
   refusedEnvironment,
@@ -173,6 +174,37 @@ const VECTORS: readonly Vector[] = [
       commands.push("orphan_command");
     },
   },
+  // CA-47: the front may listen to `vault_changed`, through one named permission.
+  // Every wider permission of the same plugin stays refused.
+  ...[
+    ["the whole event group", "core:event:default"],
+    ["emitting events", "core:event:allow-emit"],
+    ["emitting events to a target", "core:event:allow-emit-to"],
+    ["unlistening", "core:event:allow-unlisten"],
+    ["the whole window group", "core:window:default"],
+    ["closing a window", "core:window:allow-close"],
+    ["a scoped copy of the listen permission", "core:event:allow-listen-extra"],
+  ].map(
+    ([what, permission]): Vector => ({
+      name: `a capability opens ${what} (${permission})`,
+      control: "C5",
+      mutate: ({ capabilities }) => {
+        const body = firstCapability(capabilities);
+        body.permissions = [...(body.permissions as string[]), permission as string];
+      },
+    }),
+  ),
+  {
+    name: "the listen permission is granted with a scope object",
+    control: "C5",
+    mutate: ({ capabilities }) => {
+      const body = firstCapability(capabilities);
+      body.permissions = [
+        ...(body.permissions as string[]),
+        { identifier: "core:event:allow-listen", allow: [{ event: "*" }] },
+      ];
+    },
+  },
 ];
 
 function mutated(vector: Vector): ShellFiles {
@@ -202,6 +234,31 @@ describe("the shipped configuration holds the static controls", () => {
       expect(refused).toBe(0);
     });
   }
+});
+
+describe("CA-47: the front listens to vault_changed through one named permission", () => {
+  const capability = shell.capabilities[0];
+  if (capability === undefined) throw new Error("the shell has no capability file");
+  const permissions = (capability.body as { permissions: Json[] }).permissions;
+
+  test("the capability holds exactly one permission that is not an allow-<command>", () => {
+    const plugin = permissions.filter(
+      (permission) => typeof permission === "string" && permission.includes(":"),
+    );
+    console.log(`plugin permissions of the capability: ${JSON.stringify(plugin)}`);
+    expect(plugin).toEqual(["core:event:allow-listen"]);
+  });
+
+  test("the gate's enumerated list is that permission and nothing else", () => {
+    expect([...ENUMERATED_PLUGIN_PERMISSIONS]).toEqual(["core:event:allow-listen"]);
+  });
+
+  test("the gate accepts the enumerated permission and counts it", () => {
+    const report = checkShell(shell.config, shell.capabilities, shell.commands);
+    expect(count("C5", report)).toBe(0);
+    // 8 permissions (7 commands + the listen permission) + 1 window entry + 7 commands.
+    expect(report.examined.C5).toBe(8 + 1 + 7);
+  });
 });
 
 describe("red vectors: each violation of a control is refused and counted", () => {

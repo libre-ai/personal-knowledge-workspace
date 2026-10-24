@@ -88,10 +88,16 @@ describe("the names are the ones of the shared wire contract", () => {
     ) as {
       permissions: string[];
     };
+    // `allow-<command>` opens a command; the one plugin permission is the event
+    // listener of CA-47 (judged by `tests/shell/config.test.ts`), not a command.
     const permitted = capability.permissions
+      .filter((p) => p.startsWith("allow-"))
       .map((p) => p.replace(/^allow-/, "").replaceAll("-", "_"))
       .filter((name) => name !== "shell_ping");
     expect([...permitted].sort()).toEqual([...wire.commands].sort());
+    expect(capability.permissions.filter((p) => !p.startsWith("allow-"))).toEqual([
+      "core:event:allow-listen",
+    ]);
   });
 });
 
