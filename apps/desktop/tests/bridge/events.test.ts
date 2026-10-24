@@ -75,7 +75,7 @@ describe("onVaultChanged", () => {
     const { listen, emit } = emitter();
     const seen: unknown[] = [];
     await onVaultChanged(listen, (change) => seen.push(change));
-    emit({ path: "a.md", revision: REVISION, root: "/Users/x/notes" });
+    emit({ path: "a.md", revision: REVISION, root: "/attacker/notes" });
     expect(seen).toEqual([{ path: "a.md", revision: REVISION }]);
   });
 });
