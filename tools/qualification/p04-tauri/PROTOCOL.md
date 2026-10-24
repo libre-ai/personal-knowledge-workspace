@@ -138,8 +138,11 @@ rapport les reprend.
 
 ## 9. Ce que ce protocole ne fait pas
 
-- Il ne contient aucune valeur mesurée : aucune mesure n'a été faite sous Tauri à ce commit
-  (`docs/prd.md` § 5, colonne « Valeur courante »).
+- Il ne contient aucune valeur mesurée des critères de la série : aucune mesure de la série n'a été
+  faite à ce commit (`docs/prd.md` § 5, colonne « Valeur courante »). Les relevés datés du § 10
+  (instants de rendu et cadence des rappels, résolution des horloges, noms des processus, rappels
+  suspendus en fenêtre masquée) sont des sondes de l'instrument, faites hors série, sans frappe
+  système ; aucun n'est un échantillon d'une mesure du § 3.
 - Il ne qualifie pas la machine de mesure et ne signe rien : la qualification macOS est le paquet
   WP-6.
 - Le choix du paragraphe édité par fichier pour AT-01 est fixé au § 10.5 avant la série et
@@ -166,23 +169,41 @@ plan pendant toute mesure. Le dossier ouvert est une copie neuve du corpus CR-10
 
 ### 10.1 Instant peint
 
-L'instant où un changement de l'éditeur est peint est l'horodatage `performance.now()` du premier
-rappel `requestAnimationFrame` qui s'exécute après que le changement est présent dans le DOM de
-l'éditeur : c'est le début de la trame qui peint le changement, WebKit mettant à jour le rendu de
-la page juste après les rappels `requestAnimationFrame` de la trame. C'est une borne basse de la
-peinture observable depuis la page : le style, la mise en page et la peinture de cette trame, puis
-sa composition par le processus GPU de WebKit, la suivent et ne sont pas observés ; l'écart est
-d'au plus une période de trame. La période de trame relevée pendant chaque lancement (intervalles
-entre rappels `requestAnimationFrame` successifs : nombre, p50, p95, maximum) est consignée au
-rapport. AT-02 et NFR-03 emploient la même définition.
+L'instant où un changement de l'éditeur est peint est l'horodatage `performance.now()` lu en
+première instruction du premier rappel `requestAnimationFrame` que le script d'instrumentation
+demande dès qu'il observe le changement dans le DOM de l'éditeur, par un `MutationObserver` posé sur
+l'élément de contenu de l'éditeur (`.cm-content`). C'est le début de la mise à jour de rendu qui
+peint le changement : WebKit exécute les rappels `requestAnimationFrame` d'une mise à jour avant
+son style, sa mise en page et sa peinture. C'est une borne basse de la peinture observable depuis
+la page, à une condition : que le changement soit fait hors d'un rappel `requestAnimationFrame`
+(gestionnaire de clavier, soumission de formulaire), donc avant le début de la mise à jour qui le
+peint. Un changement observé pendant un rappel `requestAnimationFrame` est peint par la mise à jour
+en cours, et la borne aurait une mise à jour de retard : le script note pour chaque échantillon si
+l'observation a eu lieu pendant un rappel, et un tel échantillon est une erreur d'instrument
+(§ 10.7). L'écart entre la borne et la peinture est la durée du style, de la mise en page et de la
+peinture de cette mise à jour, puis de sa composition par le processus GPU de WebKit : il n'est pas
+observé, et il n'est inférieur à une période de trame que si la mise à jour tient dans son budget.
+AT-02 et NFR-03 emploient la même définition.
+
+Le rapport consigne, par configuration d'AT-02 et pour les lancements de NFR-03, l'écart entre
+l'observation du changement et la borne de fin (nombre, p50, p95, maximum), ce qui distingue cette
+borne de toute autre. La période de trame est relevée au début de chaque lancement d'AT-02 et de
+NFR-03, avant toute frappe et avant l'ouverture mesurée : 600 intervalles entre rappels
+`requestAnimationFrame` successifs, dont le nombre, le p50, le p95 et le maximum sont consignés.
+Hors de ce relevé, le script ne demande aucun rappel `requestAnimationFrame` en dehors de ceux de la
+borne de fin : le relevé qui a fondé cette définition a été fait page au repos, et une boucle de
+rappels continue cale le rendu sur les trames, de sorte qu'un changement attendrait la trame
+suivante (inféré, non mesuré).
 
 Décision du propriétaire du 2026-10-24, avant toute mesure : « Premier rAF ». La définition
 précédente, le rappel demandé depuis ce premier rappel (début de la trame suivante), ajoutait au
 moins une période de trame à chaque échantillon. Relevé du 2026-10-24 dans la WKWebView du binaire
-de série (Mac16,6, changement par `view.dispatch` depuis le script d'instrumentation, sans frappe
-système, 200 échantillons) : écart à la dispatch p95 2 ms au premier rappel, p95 19 ms au second,
-pour des rappels cadencés à p50 17 ms et p95 18 ms (600 intervalles) ; AT-02 sur la note de
-5 000 lignes (p95 ≤ 16 ms) aurait été rouge par construction.
+de série (Mac16,6, changement par `view.dispatch` depuis le script d'instrumentation après une
+attente tirée entre 100 et 150 ms, page au repos, sans frappe système, 200 échantillons) : écart à
+la dispatch p95 2 ms et maximum 2 ms au premier rappel, p95 19 ms au second, pour des rappels
+cadencés à p50 17 ms et p95 18 ms quand une boucle continue les demande (600 intervalles) ; AT-02
+sur la note de 5 000 lignes (p95 ≤ 16 ms) aurait été rouge par construction. La frappe système
+n'a pas été sondée : l'écart consigné par configuration est la mesure qui le dira.
 
 Résolution des horloges, relevé du 2026-10-24 dans la WKWebView du binaire de série (Mac16,6,
 macOS 26.6.2, page non isolée, `crossOriginIsolated` faux) : `performance.now()` et
@@ -240,9 +261,12 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   visible est rendue. La zone visible est la boîte du défileur de l'éditeur (`.cm-scroller`). Elle
   est rendue quand les éléments de ligne de l'éditeur (`.cm-line`) dont la boîte coupe cette zone
   sont, dans l'ordre, les lignes 1 à `k` de la note (`k` au moins 1), chacun portant le texte de la
-  ligne de même rang de la note, et quand le bas de la ligne `k` atteint le bas de la zone, ou que
-  `k` est la dernière ligne de la note. La note est ouverte en haut (ligne 1 en tête). C'est le rendu
-  de la zone visible d'abord admis par le § 3 ; le reste de la note n'est pas attendu.
+  ligne de même rang de la note, et quand le bas de la boîte de la ligne `k` est au bas de la zone
+  ou au-delà (la ligne `k` peut être coupée par le bas du défileur), ou que `k` est la dernière
+  ligne de la note. La note est ouverte en haut (ligne 1 en tête). C'est le rendu de la zone visible
+  d'abord admis par le § 3 ; le reste de la note n'est pas attendu. Si cet état n'est pas observé
+  2 000 ms après la borne de début, l'échantillon du lancement vaut +oo, comme une frappe non rendue
+  (§ 5) : il reste dans l'échantillon et le lancement n'est pas refait.
 - **Aperçu actif** : l'extension d'aperçu est montée à l'ouverture ; ses marques, calculées après
   `preview-delay-ms`, ne sont pas attendues par la borne de fin (même lecture que la décision
   « Caractère tapé peint » pour AT-02 : l'aperçu travaille en arrière-plan).
@@ -265,7 +289,9 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   Le relevé d'avant est la dernière opération qui précède la création du processus de la
   coquille : il suit les lectures de rejet (§ 10.7) et la sortie du processus du lancement
   précédent. Si la différence ne compte pas exactement un processus de chacun des trois noms, le
-  lancement n'est pas un échantillon : il est consigné et refait (§ 10.7).
+  lancement n'est pas un échantillon : il est consigné et refait (§ 10.7). Une autre application
+  qui fait naître des processus de ces noms pendant un lancement fausse la différence : pendant la
+  série, aucune autre application qui emploie WebKit n'est ouverte.
 - **Période** : les relevés sont lancés aux échéances `t0 + n × nfr-10-sample-period-ms` (§ 1),
   `t0` étant la création du processus, jusqu'à sa sortie ; un relevé commence à son échéance et
   non à la fin du précédent. Une échéance déjà passée quand le relevé précédent se termine est
@@ -350,9 +376,21 @@ La fenêtre doit rester visible : WebKit suspend `requestAnimationFrame` dans un
 (relevé du 2026-10-24 : pendant que la fenêtre était derrière une autre application au premier
 plan, la page est passée en `visibilityState` `hidden` et l'instrumentation n'a plus reçu aucune
 trame). Ces interruptions sont consignées à part des lancements rejetés. Une passe, une configuration
-ou un lancement pendant lequel la page passe en `hidden`, ou pendant lequel la coquille n'est pas
-l'application au premier plan au moment d'une frappe système, est interrompu, consigné avec sa
-cause et refait ; ce n'est pas un échantillon.
+ou un lancement est interrompu, consigné avec sa cause et refait, et ce n'est pas un échantillon,
+pour l'une des causes de cet ensemble fermé :
+
+- `page-hidden` : `document.visibilityState` vaut `hidden`, lu par le script d'instrumentation à
+  chaque échantillon et à chaque événement `visibilitychange` ;
+- `shell-not-frontmost` : au moment d'une frappe système, l'application au premier plan n'est pas
+  la coquille, lu par le harnais juste avant chaque `CGEventPost` comme
+  `NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier` différent du pid de la
+  coquille ;
+- `instrument-error` : une différence négative (§ 10.2) ou un changement observé pendant un rappel
+  `requestAnimationFrame` (§ 10.1).
+
+Trois rejets ou interruptions consécutifs de même cause arrêtent la série : elle est consignée
+avec cette cause, sans verdict, et ne reprend qu'après correction de la machine ou de l'instrument,
+sur une copie neuve du corpus.
 
 ### 10.8 Contrôle de gel
 
