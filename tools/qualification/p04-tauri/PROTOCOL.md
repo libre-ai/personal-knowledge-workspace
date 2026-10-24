@@ -37,6 +37,16 @@ Les champs de ce tableau sont lus par `protocol.test.ts` ; la colonne « Champ �
 | `corpus-files` | 10000 |
 | `corpus-sha256` | 451bc87dc3c069d15827af02d2cd799501f98b116967aa984f5a6bc40c457bed |
 | `accessibility-method` | API d'accessibilité macOS ; proportion du texte exposé |
+| `preview-delay-ms` | 120 |
+| `at-01-edit-text` | p04 |
+| `at-02-typed-cycle` | abcdefghijklmnopqrstuvwxyz |
+| `at-02-pause-ms` | 150 |
+| `nfr-10-sample-period-ms` | 100 |
+| `nfr-10-hold-ms` | 5000 |
+| `save-timeout-ms` | 10000 |
+
+Les sept dernières lignes sont des paramètres de procédure du § 10, ajoutés avant la première
+mesure ; ce ne sont ni des seuils ni des effectifs.
 
 ## 2. Effectifs
 
@@ -121,9 +131,9 @@ Le texte exposé est mesuré par l'API d'accessibilité macOS, lue sur l'applica
 note de 1 Mio ouverte dans l'éditeur. La proportion est le nombre de caractères du texte de la note
 que l'API restitue, identiques à ceux du fichier à la même position, divisé par le nombre de
 caractères du fichier. Un caractère exposé mais différent de celui du fichier ne compte pas. Le
-seuil est de 100 % (`ADR-0057:66`, arbitrage distinct du 2026-10-23). Le harnais de la série (paquet
-WP-5) fixe les attributs et les appels d'accessibilité lus, avant la première mesure, et les écrit
-dans le rapport.
+seuil est de 100 % (`ADR-0057:66`, arbitrage distinct du 2026-10-23). Les attributs et les appels
+d'accessibilité lus, et l'unité de caractère, sont fixés au § 10.6 avant la première mesure ; le
+rapport les reprend.
 
 ## 9. Ce que ce protocole ne fait pas
 
@@ -131,8 +141,8 @@ dans le rapport.
   (`docs/prd.md` § 5, colonne « Valeur courante »).
 - Il ne qualifie pas la machine de mesure et ne signe rien : la qualification macOS est le paquet
   WP-6.
-- Le choix du paragraphe édité par fichier pour AT-01 est fixé par le harnais de WP-5 avant la
-  série et consigné dans le manifeste du rapport ; il ne dépend d'aucun résultat.
+- Le choix du paragraphe édité par fichier pour AT-01 est fixé au § 10.5 avant la série et
+  consigné dans le manifeste du rapport ; il ne dépend d'aucun résultat.
 - Les pièges d'octets du § 7 portent sur le contenu des fichiers. Les 10 000 chemins du corpus sont
   en ASCII (`notes/NN/note-NNNNN.md`) : la normalisation Unicode des noms de fichier (NFC et NFD
   sur APFS) n'est pas exercée par ce corpus. Un renommage entre les deux formes serait rapporté par
@@ -141,3 +151,165 @@ dans le rapport.
   octet et n'est pas rapporté ; un lien symbolique, lui, fait refuser la comparaison. Un instantané
   de référence est produit par l'outil lui-même : l'oracle ne valide pas un instantané écrit à la
   main (clés dupliquées comprises, la dernière valeur est retenue).
+
+## 10. Bornes et procédures de mesure
+
+Cette section fixe, avant la première mesure, ce que chaque mesure lit, entre quelles bornes et
+par quelle commande. Elle ne change ni un seuil du § 3 ni un effectif du § 2. Tout se mesure dans
+la coquille construite (`ADR-0057:52`) : le binaire de série du paquet WP-7 est bâti sur la
+bibliothèque de la coquille et sur son front embarqué ; il n'y ajoute qu'un sélecteur de racine
+injecté (le dialogue natif ne s'automatise pas) et un script d'instrumentation, qui rend ses
+relevés par le titre du document, sans port. La fenêtre de la coquille est visible et au premier
+plan pendant toute mesure. Le dossier ouvert est une copie neuve du corpus CR-10k, écrite par
+`cr10k.ts` et vérifiée contre `corpus-sha256` avant chaque passe ou lancement.
+
+### 10.1 Instant peint
+
+L'instant où un changement de l'éditeur est peint est l'horodatage `performance.now()` du rappel
+`requestAnimationFrame` demandé depuis le premier rappel `requestAnimationFrame` qui s'exécute
+après que le changement est présent dans le DOM de l'éditeur : c'est le début de la trame qui suit
+celle où le changement a été rendu. C'est une borne haute de la peinture observable depuis la
+page ; la composition par le processus GPU de WebKit n'est pas observée. AT-02 et NFR-03 emploient
+la même définition.
+
+### 10.2 AT-02, de la frappe système au caractère peint
+
+Décision du propriétaire du 2026-10-24 : « Caractère tapé peint », de la frappe système au
+caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
+
+- **Frappe** : un événement clavier du système, `keyDown` puis `keyUp` d'une seule touche sans
+  modificateur, créé par `CGEventCreateKeyboardEvent` et posté par `CGEventPost` au point
+  `kCGHIDEventTap`. Les caractères tapés suivent le cycle `at-02-typed-cycle` du § 1, dans l'ordre,
+  repris au début après le dernier.
+- **Borne de début** : l'horodatage de l'événement système, lu dans la page comme
+  `KeyboardEvent.timeStamp` du `keydown`. Ce protocole suppose que WebKit le dérive de
+  l'horodatage de l'événement de la plateforme, et non de l'instant de sa distribution à la page ;
+  cette supposition n'est pas mesurée à ce commit. Le harnais la vérifie avant la série par un
+  contrôle discriminant : une frappe postée pendant que le fil principal de la page est
+  bloqué 200 ms doit mesurer au moins 200 ms ; si ce contrôle échoue, la série ne démarre pas, et
+  aucune autre borne de début n'est substituée sans révision de ce protocole avant mesure.
+- **Borne de fin** : l'instant peint (§ 10.1) du premier changement du DOM de l'éditeur postérieur
+  au `keydown` qui porte le caractère tapé.
+- **Configuration** : un lancement par configuration ; la note (indice 1, 5 000 lignes ; indice 0,
+  1 Mio, `cr10k.ts`) est ouverte, puis le curseur est placé par le script d'instrumentation, par
+  une sélection de l'éditeur et non par une frappe, à la fin de la ligne de numéro `ceil(L / 2)`
+  (comptée à partir de 1), `L` étant le nombre de lignes de la note dans l'éditeur. Les 3 000
+  frappes de la configuration sont faites dans ce lancement.
+- **Aperçu actif** : l'extension d'aperçu en direct est montée avec son délai livré,
+  `preview-delay-ms` du § 1 (`apps/desktop/src/editor/preview.ts:44`) ; elle recalcule en arrière-plan
+  pendant la série. Une frappe est postée `at-02-pause-ms` après l'instant peint de la précédente,
+  ou après son délai de 2 000 ms : l'aperçu, déclenché 120 ms après chaque frappe, recalcule entre
+  deux frappes et peut chevaucher la suivante.
+- **Verdict d'une frappe** : la différence fin moins début, en millisecondes ; +oo si la borne de
+  fin n'est pas observée en 2 000 ms (§ 5). Une différence négative est une erreur d'instrument :
+  la configuration est interrompue, consignée et refaite.
+
+### 10.3 NFR-03, première ouverture de la note de 1 Mio
+
+- **Lancement** : la coquille est lancée sur une copie neuve du corpus, le dossier est choisi par
+  le sélecteur injecté, et la note de 1 Mio est la première note ouverte du processus. Aucun
+  `rebuild_index` n'est appelé. Le cache de fichiers du système n'est pas vidé (cela exige des
+  droits d'administrateur) ; le rapport le dit.
+- **Borne de début** : `performance.now()` juste avant que le script d'instrumentation soumette le
+  formulaire d'ouverture de la note (`#open-form`, `requestSubmit()`).
+- **Borne de fin** : l'instant peint (§ 10.1) du premier état où l'éditeur est monté et où la zone
+  visible contient le texte de la note (au moins une ligne rendue, dont le texte est celui de la
+  première ligne de la note). C'est le rendu de la zone visible d'abord admis par le § 3.
+- **Aperçu actif** : l'extension d'aperçu est montée à l'ouverture ; ses marques, calculées après
+  `preview-delay-ms`, ne sont pas attendues par la borne de fin (même lecture que la décision
+  « Caractère tapé peint » pour AT-02 : l'aperçu travaille en arrière-plan).
+- Les lancements de NFR-03 sont distincts de ceux de NFR-10 et de ceux de l'accessibilité.
+
+### 10.4 NFR-10, mémoire résidente
+
+- **Métrique** : la somme, sur les processus comptés, de la taille résidente (RSS) que rend
+  `ps -o pid=,rss= -p <pid>,<pid>,...`, en kibioctets, convertie en Mio. Chaque processus compte ses
+  pages partagées (bibliothèques du système) : la somme majore la mémoire propre de l'application.
+- **Processus comptés** : le processus de la coquille et les trois processus auxiliaires de WebKit
+  qu'il fait naître, `com.apple.WebKit.WebContent`, `com.apple.WebKit.GPU` et
+  `com.apple.WebKit.Networking`, fils de `launchd` et non de la coquille. Ils sont attribués par
+  différence : les processus `com.apple.WebKit.*` présents après le lancement et absents juste
+  avant (`ps -A -o pid=,comm=`). Si la différence ne compte pas exactement un processus de chacun des
+  trois noms, le lancement n'est pas un échantillon : il est consigné et refait (§ 10.7).
+- **Période** : un relevé toutes les `nfr-10-sample-period-ms` (§ 1), du lancement du processus à
+  sa sortie.
+- **Scénario d'un lancement** : lancement, choix du dossier par le sélecteur injecté, appel de
+  `rebuild_index` par le script d'instrumentation (l'index n'existe qu'après lui), ouverture de la
+  note de 1 Mio, attente de la première application des marques de l'aperçu, tenue de
+  `nfr-10-hold-ms` (§ 1), sortie normale.
+- **Agrégation** : l'échantillon d'un lancement est le maximum des sommes relevées pendant sa vie
+  (pic de vie). Le seuil est un plafond : il est comparé au maximum des 60 échantillons, pas à leur
+  p95 ; le p95 du § 4 est consigné à côté, sans verdict.
+
+### 10.5 AT-01, fichiers, paragraphe, fermeture
+
+- **Passe** : une copie neuve du corpus, vérifiée contre `corpus-sha256`, puis instantané de
+  référence par `oracle.ts`. Un premier lancement fait l'aller-retour sans édition des 10 000
+  fichiers, par ordre de chemin, puis sort ; l'instantané est comparé à la référence
+  (`compareSnapshots`). Un second lancement, sur la même copie, édite un paragraphe de chaque fichier
+  éditable, par ordre de chemin, puis sort ; chaque fichier est alors comparé à ses octets d'avant.
+  La passe suivante repart d'une copie neuve.
+- **Ouverture et fermeture** : une note est ouverte par la soumission du formulaire d'ouverture avec
+  son chemin. Elle est fermée quand la note suivante est ouverte à sa place (l'application détruit
+  l'éditeur, ce qui écrit ce qui reste à écrire), et la dernière note d'un lancement par la sortie
+  normale du processus. Avant d'ouvrir la note suivante, le harnais attend que l'état
+  d'enregistrement (`#save-state`, attribut `data-state`) ne soit ni `dirty` ni `saving` ; après une
+  édition, il attend `saved`, au plus `save-timeout-ms` (§ 1). Un état `conflict`, `refused` ou
+  `failed`, ou un délai dépassé, est consigné pour ce fichier.
+- **Fichier éditable** : un fichier du corpus dont les octets se décodent en UTF-8 strict (la marque
+  d'ordre des octets étant gardée comme caractère, comme le fait l'éditeur) et qui compte au moins un
+  paragraphe. Le nombre de fichiers éditables se compte sur le corpus, avant la série, et figure dans
+  le manifeste.
+- **Paragraphe** : une plage d'octets rendue par `paragraphRanges` de `oracle.ts` (suite maximale de
+  lignes non vides, terminateurs exclus). Le paragraphe édité d'un fichier qui en compte `P` est
+  celui de rang `floor(P / 2)`, compté à partir de 0.
+- **Édition** : le curseur est placé par le script d'instrumentation, par une sélection de
+  l'éditeur, à la fin du paragraphe (octet de fin de la plage, converti en position de l'éditeur),
+  puis le texte `at-01-edit-text` du § 1 est tapé par des frappes système (§ 10.2), une frappe par
+  caractère.
+- **Comptes** : le rapport imprime, par passe, le nombre de fichiers examinés, d'identiques, de
+  modifiés, de manquants et d'ajoutés à l'aller-retour, et le nombre d'éditions examinées. Une
+  édition est examinée quand le fichier diffère de ses octets d'avant ; elle est conforme quand
+  `checkParagraphEdit` rend `ok`. Une édition attendue et non constatée (fichier inchangé, note
+  refusée, état d'enregistrement en échec) rend la ligne rouge : la ligne ne peut pas être verte
+  faute d'édition. Les fichiers non éditables restent identiques à l'octet.
+
+### 10.6 Accessibilité
+
+- **Lancement** : distinct de ceux de NFR-10 ; la note de 1 Mio est ouverte et l'éditeur a le
+  focus. Le processus qui lit doit être autorisé par macOS dans Réglages, Confidentialité et
+  sécurité, Accessibilité (`AXIsProcessTrusted()` vrai) ; sans cette autorisation, la mesure n'a pas
+  lieu et le rapport le dit (verdict indisponible, jamais un zéro ni un vert).
+- **Élément lu** : `AXUIElementCreateApplication(pid)` sur le processus de la coquille, puis
+  l'attribut `AXFocusedUIElement` de l'application, l'éditeur ayant le focus.
+- **Attributs et appels lus** : `AXRole` (consigné) ; `AXNumberOfCharacters` ; `AXValue` ; si
+  `AXValue` est absent ou plus court que `AXNumberOfCharacters`, le texte est lu par
+  l'attribut paramétré `AXStringForRange`, par tranches de 10 000 caractères jusqu'à
+  `AXNumberOfCharacters`. Tous les appels passent par `AXUIElementCopyAttributeValue` et
+  `AXUIElementCopyParameterizedAttributeValue`.
+- **Unité de caractère** : l'unité de code UTF-16, celle des chaînes de l'API d'accessibilité. Le
+  texte de référence est le fichier décodé en UTF-8 strict, marque d'ordre des octets gardée, en
+  unités UTF-16 ; la proportion du § 8 compte les unités égales à la même position.
+
+### 10.7 Rejet d'un lancement
+
+Avant et après chaque lancement, puis à chaque relevé de NFR-10, le harnais lit :
+
+- **Session verrouillée** : `ioreg -n Root -d1 -a` ; la session est verrouillée quand l'entrée de
+  `IOConsoleUsers` de l'utilisateur courant porte `CGSSessionScreenIsLocked` à vrai.
+- **Écran éteint** : `CGDisplayIsAsleep(CGMainDisplayID())` de CoreGraphics ; l'écran est éteint
+  quand l'appel rend une valeur non nulle.
+
+Un lancement pendant lequel l'une des deux lectures est vraie est rejeté et refait (§ 5) ; de même
+un lancement dont les processus de NFR-10 ne s'attribuent pas (§ 10.4). Le rapport consigne, par
+cause, le nombre de lancements rejetés.
+
+### 10.8 Contrôle de gel
+
+Le protocole est gelé quand le premier rapport existe. Soit `P` le dernier commit qui modifie ce
+fichier (`git log -1 --format=%H -- tools/qualification/p04-tauri/PROTOCOL.md`) et `R` le premier
+commit qui ajoute un fichier sous `tools/qualification/p04-tauri/reports/`
+(`git log --diff-filter=A --format=%H -- tools/qualification/p04-tauri/reports`, dernière ligne).
+Le gel tient quand `P` diffère de `R` et que `git merge-base --is-ancestor P R` sort 0. Un
+historique tronqué (`git rev-parse --is-shallow-repository` rend `true`) ne permet pas ce contrôle :
+il échoue, il ne passe pas. `check-report.ts` (paquet WP-7) l'applique.
