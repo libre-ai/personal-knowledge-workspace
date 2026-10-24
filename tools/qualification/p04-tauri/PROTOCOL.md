@@ -185,9 +185,10 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   `KeyboardEvent.timeStamp` du `keydown`. Ce protocole suppose que WebKit le dérive de
   l'horodatage de l'événement de la plateforme, et non de l'instant de sa distribution à la page ;
   cette supposition n'est pas mesurée à ce commit. Le harnais la vérifie avant la série par un
-  contrôle discriminant : une frappe postée pendant que le fil principal de la page est
-  bloqué 200 ms doit mesurer au moins 200 ms ; si ce contrôle échoue, la série ne démarre pas, et
-  aucune autre borne de début n'est substituée sans révision de ce protocole avant mesure.
+  contrôle discriminant : la page signale, puis bloque son fil principal 500 ms ; le harnais poste
+  une frappe dès le signal ; la latence mesurée doit être d'au moins 250 ms (un horodatage pris à
+  la distribution donnerait de l'ordre d'une trame). Si ce contrôle échoue, la série ne démarre
+  pas, et aucune autre borne de début n'est substituée sans révision de ce protocole avant mesure.
 - **Borne de fin** : l'instant peint (§ 10.1) du premier changement du DOM de l'éditeur postérieur
   au `keydown` qui porte le caractère tapé.
 - **Configuration** : un lancement par configuration ; la note (indice 1, 5 000 lignes ; indice 0,
@@ -254,7 +255,9 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   l'éditeur, ce qui écrit ce qui reste à écrire), et la dernière note d'un lancement par la sortie
   normale du processus. Avant d'ouvrir la note suivante, le harnais attend que l'état
   d'enregistrement (`#save-state`, attribut `data-state`) ne soit ni `dirty` ni `saving` ; après une
-  édition, il attend `saved`, au plus `save-timeout-ms` (§ 1). Un état `conflict`, `refused` ou
+  édition, le script retire le focus de l'éditeur, ce qui écrit sans attendre la pause de frappe
+  (`apps/desktop/src/editor/note-editor.ts`, gestionnaire `blur`), puis le harnais attend `saved`,
+  au plus `save-timeout-ms` (§ 1). Un état `conflict`, `refused` ou
   `failed`, ou un délai dépassé, est consigné pour ce fichier.
 - **Fichier éditable** : un fichier du corpus dont les octets se décodent en UTF-8 strict (la marque
   d'ordre des octets étant gardée comme caractère, comme le fait l'éditeur) et qui compte au moins un
