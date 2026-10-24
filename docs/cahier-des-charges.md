@@ -472,7 +472,8 @@ P04, jalon ADR-0057 — protocole et corpus (paquet WP-1) :
   Validation : `bun test tools/qualification/p04-tauri/oracle.test.ts`, dont deux vecteurs rouges
   (mutation d'un octet, octet hors paragraphe) vus rouges puis le cas nominal vert.
 - CA-36 [état : à construire] Le fichier `tools/qualification/p04-tauri/PROTOCOL.md` est commité
-  avant la première mesure et porte : effectifs (20 passes AT-01, 3 000 frappes AT-02, 60
+  avant la première mesure et porte : effectifs (20 passes AT-01, 3 000 frappes AT-02 par
+  configuration, soit un échantillon par seuil, note de 5 000 lignes et note de 1 Mio, 60
   lancements NFR-03 et NFR-10), les seuils de `prd.md` § 5 sans révision, statistique p95 au rang
   le plus proche sur les échantillons poolés, règles de rejet (frappe non rendue en 2 s = +oo ;
   lancement fait session verrouillée ou écran éteint rejeté et refait), la machine de mesure
