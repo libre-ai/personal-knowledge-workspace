@@ -39,12 +39,33 @@ phases:
         text: "Demonstrate a complete capture, edit, retrieval and controlled-export journey using synthetic notes. Verify backup and restoration, incorrect credentials, damaged input and interrupted operations against the actual cryptographic components. Measure browser behavior and resource limits on the exact supported runtimes. Test storage, deletion and network behavior before claiming locality, confidentiality or recoverability."
         weight: 1
         status: "pending"
+  - id: "p04-qualification"
+    title: "P04 qualification in the Tauri 2 shell (ADR-0057)"
+    note: "Written before any measurement of the series (CA-46, CA-48). A red threshold is a surface decision taken by ADR (ADR-0057 section 3), never a revision of the threshold or of the ceiling."
+    exit_criteria:
+      - id: "p04-series-green"
+        text: "Série du protocole verte (CA-43, CA-44): the measurement series of tools/qualification/p04-tauri/PROTOCOL.md, replayed in the built shell on the declared machine and the CR-10k corpus, is green on every threshold, checked by tools/qualification/p04-tauri/check-report.ts. Resident memory ceiling of NFR-10: 500 Mio (application + index + interface, lifetime peak over 60 launches), frozen before any measurement."
+        weight: 1
+        status: "pending"
 hypothesis: "The intended uses described in README.md can support a useful bounded product once their activation criteria are independently qualified."
 evidence_required:
   - "Demonstrate a complete capture, edit, retrieval and controlled-export journey using synthetic notes. Verify backup and restoration, incorrect credentials, damaged input and interrupted operations against the actual cryptographic components. Measure browser behavior and resource limits on the exact supported runtimes. Test storage, deletion and network behavior before claiming locality, confidentiality or recoverability."
 promotion_criteria:
   - to: "spec-published"
     when: "A bounded specification and its acceptance criteria are reviewed and explicitly admitted."
-kill_predicates: []
+kill_predicates:
+  - id: "ab-3-gate-b-red-twice"
+    predicate: "Gate B campaigns replayed on the desktop-arm64-high-memory-reference class (CA-14) fail twice in a row on two corrected candidates, for a cause other than the refusal by the historical fingerprint QUALIFIED_CORE_SHA256 (Y41): the apps/notebook web host is withdrawn and only notebook-core is kept, as the library of the encrypted replica."
+    source: "docs/cahier-des-charges.md (AB-3)"
+  - id: "ab-4-vendored-aes-without-provenance"
+    predicate: "When the NOTEBOOK_BACKUP_FEATURE_ENABLED feature gate is lifted, the vendored patch third_party/rustcrypto-aes-0.8.4 still has no I-28 provenance gate in bun run check and is not replaced by an equivalent published version: the encrypted backup path in the browser is abandoned for the native core alone."
+    source: "docs/cahier-des-charges.md (AB-4)"
+  - id: "ab-5-commons-cover-the-need"
+    predicate: "For P03, P05, P06 or P07, a commons that is not archived, pushed less than 365 days before the measure and under a licence admitted by I-11 covers the need with no gap found by the parity matrix run line by line: no code is written in this repository for that P-xx and its catalogue line becomes integration."
+    source: "docs/cahier-des-charges.md (AB-5)"
+  - id: "ab-6-p04-not-used"
+    predicate: "The local journal and the owner script (CA-31), read on day 29 of a window of 28 consecutive days, give fewer than 24 days with a note created or changed in P04, or show a launch of the previous notes tool: the P04 part of the repository returns to freeze."
+    window: "28 consecutive days, read on day 29"
+    source: "docs/cahier-des-charges.md (AB-6)"
 benchmark:
   none: "No benchmark was executed for this integrated tree."

@@ -1,0 +1,82 @@
+// SPDX-FileCopyrightText: 2026 Libre AI contributors
+// SPDX-License-Identifier: EUPL-1.2
+
+// Rejection reads of PROTOCOL.md section 10.7 and the frontmost-application
+// check that precedes every system keystroke. CoreGraphics is loaded only when
+// a read is made, so importing this module on Linux (the CI of the static
+// tests) loads nothing.
+
+import { dlopen, FFIType } from "bun:ffi";
+
+function run(argv: string[]): string {
+  const result = Bun.spawnSync(argv, { stdout: "pipe", stderr: "pipe" });
+  if (result.exitCode !== 0)
+    throw new Error(`${argv[0]} failed: ${result.stderr.toString().trim()}`);
+  return result.stdout.toString();
+}
+
+/**
+ * `ioreg -n Root -d1 -a`: the entry of `IOConsoleUsers` whose
+ * `kCGSSessionUserIDKey` is `uid` is locked when it carries
+ * `CGSSessionScreenIsLocked` true. No entry for `uid` is an error: an
+ * unreadable state is never an unlocked one.
+ */
+export function parseSessionLocked(plist: string, uid: number): boolean {
+  const start = plist.indexOf("<key>IOConsoleUsers</key>");
+  if (start === -1) throw new Error("ioreg: no IOConsoleUsers");
+  const end = plist.indexOf("</array>", start);
+  if (end === -1) throw new Error("ioreg: IOConsoleUsers is not closed");
+  const users = plist.slice(start, end).match(/<dict>[\s\S]*?<\/dict>/g) ?? [];
+  const mine = users.filter((entry) =>
+    new RegExp(`<key>kCGSSessionUserIDKey</key>\\s*<integer>${uid}</integer>`).test(entry),
+  );
+  if (mine.length === 0) throw new Error(`ioreg: no console session for uid ${uid}`);
+  return mine.some((entry) => /<key>CGSSessionScreenIsLocked<\/key>\s*<true\/>/.test(entry));
+}
+
+export function sessionLocked(): boolean {
+  const uid = process.getuid?.();
+  if (uid === undefined) throw new Error("no uid on this platform");
+  return parseSessionLocked(run(["ioreg", "-n", "Root", "-d1", "-a"]), uid);
+}
+
+let coreGraphics: ReturnType<typeof openCoreGraphics> | null = null;
+function openCoreGraphics() {
+  return dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", {
+    CGMainDisplayID: { args: [], returns: FFIType.u32 },
+    CGDisplayIsAsleep: { args: [FFIType.u32], returns: FFIType.u32 },
+  });
+}
+
+/** `CGDisplayIsAsleep(CGMainDisplayID())` is non-zero: the screen is off. */
+export function displayAsleep(): boolean {
+  coreGraphics ??= openCoreGraphics();
+  return coreGraphics.symbols.CGDisplayIsAsleep(coreGraphics.symbols.CGMainDisplayID()) !== 0;
+}
+
+export type Rejection = "session-locked" | "display-asleep";
+
+/** The cause that rejects a launch now, or null. */
+export function rejection(): Rejection | null {
+  if (sessionLocked()) return "session-locked";
+  if (displayAsleep()) return "display-asleep";
+  return null;
+}
+
+export function parseFrontAsn(text: string): string {
+  const asn = /ASN:[0-9a-fx-]+:/.exec(text)?.[0];
+  if (asn === undefined) throw new Error("lsappinfo front: no application");
+  return asn;
+}
+
+export function parseFrontPid(text: string): number {
+  const pid = /"pid"=([0-9]+)/.exec(text)?.[1];
+  if (pid === undefined) throw new Error("lsappinfo info: no pid");
+  return Number(pid);
+}
+
+/** The pid of the frontmost application: system keystrokes go there. */
+export function frontmostPid(): number {
+  const asn = parseFrontAsn(run(["lsappinfo", "front"]));
+  return parseFrontPid(run(["lsappinfo", "info", "-only", "pid", asn]));
+}
