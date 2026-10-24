@@ -166,12 +166,23 @@ plan pendant toute mesure. Le dossier ouvert est une copie neuve du corpus CR-10
 
 ### 10.1 Instant peint
 
-L'instant où un changement de l'éditeur est peint est l'horodatage `performance.now()` du rappel
-`requestAnimationFrame` demandé depuis le premier rappel `requestAnimationFrame` qui s'exécute
-après que le changement est présent dans le DOM de l'éditeur : c'est le début de la trame qui suit
-celle où le changement a été rendu. C'est une borne haute de la peinture observable depuis la
-page ; la composition par le processus GPU de WebKit n'est pas observée. AT-02 et NFR-03 emploient
-la même définition.
+L'instant où un changement de l'éditeur est peint est l'horodatage `performance.now()` du premier
+rappel `requestAnimationFrame` qui s'exécute après que le changement est présent dans le DOM de
+l'éditeur : c'est le début de la trame qui peint le changement, WebKit mettant à jour le rendu de
+la page juste après les rappels `requestAnimationFrame` de la trame. C'est une borne basse de la
+peinture observable depuis la page : le style, la mise en page et la peinture de cette trame, puis
+sa composition par le processus GPU de WebKit, la suivent et ne sont pas observés ; l'écart est
+d'au plus une période de trame. La période de trame relevée pendant chaque lancement (intervalles
+entre rappels `requestAnimationFrame` successifs : nombre, p50, p95, maximum) est consignée au
+rapport. AT-02 et NFR-03 emploient la même définition.
+
+Décision du propriétaire du 2026-10-24, avant toute mesure : « Premier rAF ». La définition
+précédente, le rappel demandé depuis ce premier rappel (début de la trame suivante), ajoutait au
+moins une période de trame à chaque échantillon. Relevé du 2026-10-24 dans la WKWebView du binaire
+de série (Mac16,6, changement par `view.dispatch` depuis le script d'instrumentation, sans frappe
+système, 200 échantillons) : écart à la dispatch p95 2 ms au premier rappel, p95 19 ms au second,
+pour des rappels cadencés à p50 17 ms et p95 18 ms (600 intervalles) ; AT-02 sur la note de
+5 000 lignes (p95 ≤ 16 ms) aurait été rouge par construction.
 
 Résolution des horloges, relevé du 2026-10-24 dans la WKWebView du binaire de série (Mac16,6,
 macOS 26.6.2, page non isolée, `crossOriginIsolated` faux) : `performance.now()` et
