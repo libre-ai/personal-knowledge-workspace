@@ -127,9 +127,49 @@ test.describe("CA-49: the editor exposes the whole note to accessibility", () =>
       `CA-49 after edits: tree text ${percent(reading.tree)}; element text ${percent(reading.elements)}; ` +
         `text nodes ${reading.textNodes}, white space collapsed in ${reading.collapsed}`,
     );
+    // A ratio of 1 also holds when more is exposed than the note: the first
+    // difference is what sees a block left over at the end.
+    expect(reading.tree.firstDifference).toBeNull();
     expect(reading.tree.ratio).toBe(1);
+    expect(reading.elements.firstDifference).toBeNull();
     expect(reading.elements.ratio).toBe(1);
     expect(reading.collapsed).toBe(0);
+  });
+
+  test("notes of CR-10k with byte traps are in the tree exactly as the editor opened them", async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    // CR-10k assigns its byte traps by residue of the index (`cr10k.ts`, `trapsOf`):
+    // 2 has lone CRs, 3 a BOM and decomposed accents, 5 characters outside the BMP,
+    // 11 CRLF. The traps are read back from the bytes, so that a change of the
+    // generator shows here rather than passing unseen.
+    const traps = { crlf: 0, cr: 0, bom: 0, nfd: 0, nonBmp: 0 };
+    for (const index of [2, 3, 5, 11]) {
+      const note = corpusNote(index);
+      const text = textOf(note.bytes);
+      if (text.includes("\r\n")) traps.crlf += 1;
+      if (/\r(?!\n)/.test(text)) traps.cr += 1;
+      if (text.startsWith("\u{feff}")) traps.bom += 1;
+      if (text !== text.normalize("NFC")) traps.nfd += 1;
+      if (/[\u{10000}-\u{10ffff}]/u.test(text)) traps.nonBmp += 1;
+
+      await open(page, note.path);
+      const reading = await readAccessibleText(page, "#editor", text);
+      console.log(
+        `CA-49 traps, ${note.path} (${note.bytes.length} bytes): tree text ${percent(reading.tree)}; ` +
+          `element text ${percent(reading.elements)}; white space collapsed in ${reading.collapsed}`,
+      );
+      expect({ index, first: reading.tree.firstDifference }).toEqual({ index, first: null });
+      expect({ index, first: reading.elements.firstDifference }).toEqual({ index, first: null });
+      expect(reading.collapsed).toBe(0);
+      expect(await writes(page)).toEqual([]);
+      expect(onDisk(note.path).equals(Buffer.from(note.bytes))).toBe(true);
+    }
+    console.log(`CA-49 traps covered (notes carrying each): ${JSON.stringify(traps)}`);
+    for (const [trap, notes] of Object.entries(traps)) {
+      expect({ trap, covered: notes > 0 }).toEqual({ trap, covered: true });
+    }
   });
 });
 

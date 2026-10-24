@@ -9,10 +9,13 @@
 
 import type * as Accessibility from "../../e2e/accessibility";
 import type * as AccessibilitySpec from "../../e2e/accessibility.e2e";
+import type * as AccessibleCopy from "../../e2e/accessible-copy";
+import type * as AccessibleCopySpec from "../../e2e/accessible-copy.e2e";
 import type * as Shim from "../../e2e/shim";
 import type * as Stage from "../../e2e/stage";
 import type * as Substituting from "../../e2e/substituting";
 import type * as Teardown from "../../e2e/teardown";
+import type * as WithoutAccessibleText from "../../e2e/without-accessible-text";
 import type * as Config from "../../playwright.config";
 import type * as App from "../../src/app";
 import type * as Transport from "../../src/bridge/transport";
@@ -36,6 +39,9 @@ export type Program = [
   typeof Shim,
   typeof Accessibility,
   typeof AccessibilitySpec,
+  typeof AccessibleCopy,
+  typeof AccessibleCopySpec,
+  typeof WithoutAccessibleText,
   typeof Stage,
   typeof Substituting,
   typeof Teardown,

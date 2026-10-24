@@ -187,5 +187,6 @@ export async function readAccessibleText(
 }
 
 export function percent(proportion: Proportion): string {
-  return `${proportion.same}/${proportion.total} (${(proportion.ratio * 100).toFixed(4)} %)`;
+  const first = proportion.firstDifference === null ? "none" : String(proportion.firstDifference);
+  return `${proportion.same}/${proportion.total} (${(proportion.ratio * 100).toFixed(4)} %, first difference ${first})`;
 }
