@@ -142,10 +142,15 @@ test.describe("CA-49: the editor exposes the whole note to accessibility", () =>
     test.setTimeout(300_000);
     // CR-10k assigns its byte traps by residue of the index (`cr10k.ts`, `trapsOf`):
     // 2 has lone CRs, 3 a BOM and decomposed accents, 5 characters outside the BMP,
-    // 11 CRLF. The traps are read back from the bytes, so that a change of the
-    // generator shows here rather than passing unseen.
-    const traps = { crlf: 0, cr: 0, bom: 0, nfd: 0, nonBmp: 0 };
-    for (const index of [2, 3, 5, 11]) {
+    // 11 CRLF, 44 no final line break. A note whose index is 4 modulo 8 is written
+    // without a final line break, but most of them still end with one: the last
+    // block of a note ends with an empty line. 44 is one whose last line is a link
+    // line placed after that empty line (`insertAt` can put one at the very end),
+    // so its last byte is not a line break. The traps are read back from the
+    // bytes, so that a change of the generator shows here rather than passing
+    // unseen.
+    const traps = { crlf: 0, cr: 0, bom: 0, nfd: 0, nonBmp: 0, noFinalBreak: 0 };
+    for (const index of [2, 3, 5, 11, 44]) {
       const note = corpusNote(index);
       const text = textOf(note.bytes);
       if (text.includes("\r\n")) traps.crlf += 1;
@@ -153,6 +158,7 @@ test.describe("CA-49: the editor exposes the whole note to accessibility", () =>
       if (text.startsWith("\u{feff}")) traps.bom += 1;
       if (text !== text.normalize("NFC")) traps.nfd += 1;
       if (/[\u{10000}-\u{10ffff}]/u.test(text)) traps.nonBmp += 1;
+      if (!/[\r\n]$/.test(text)) traps.noFinalBreak += 1;
 
       await open(page, note.path);
       const reading = await readAccessibleText(page, "#editor", text);
