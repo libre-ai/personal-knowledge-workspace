@@ -1,7 +1,4 @@
 {
   "schemaVersion": "announced-scripts.v1",
-  "scripts": [
-    { "cwd": ".", "script": "check:p04-bridge", "workPackage": "WP-3" },
-    { "cwd": ".", "script": "check:p04-editor", "workPackage": "WP-4" }
-  ]
+  "scripts": [{ "cwd": ".", "script": "check:p04-editor", "workPackage": "WP-4" }]
 }

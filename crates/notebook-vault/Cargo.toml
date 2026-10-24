@@ -1,0 +1,24 @@
+[package]
+name = "libre-ai-notebook-vault"
+version = "0.1.0"
+description = "P04 vault core: byte-faithful note reads and atomic writes, Markdown preview as an attribute tree, full-text index (EF-P04-9)"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "libre_ai_notebook_vault"
+
+[dependencies]
+pulldown-cmark.workspace = true
+serde.workspace = true
+sha2.workspace = true
+unicode-normalization.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

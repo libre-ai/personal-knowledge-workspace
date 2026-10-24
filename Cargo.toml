@@ -4,6 +4,7 @@
 # migrations and deployables (PRD 12 §3.7, owner decision Y4).
 members = [
   "crates/notebook-core",
+  "crates/notebook-vault",
   "crates/p02-domain",
   "crates/p02-fetch",
   "crates/p02-store",
@@ -16,6 +17,7 @@ members = [
 # `-p libre-ai-p04-desktop` (`bun run check:p04-shell`).
 default-members = [
   "crates/notebook-core",
+  "crates/notebook-vault",
   "crates/p02-domain",
   "crates/p02-fetch",
   "crates/p02-store",
@@ -75,6 +77,15 @@ url = "=2.5.8"
 # bridge), the X11 and D-Bus Linux backends and the Windows common controls.
 tauri = { version = "=2.12.4", default-features = false, features = ["wry", "compression"] }
 tauri-build = { version = "=2.7.3", default-features = false, features = ["config-json"] }
+
+# P04 vault core (notebook-vault, EF-P04-9). Exact versions, each published at
+# least three days before adoption (measured on crates.io on 2026-10-24:
+# pulldown-cmark 0.13.4 on 2026-05-20, the newer 0.13.5 of 2026-10-21 is too
+# young; unicode-normalization 0.1.25 on 2025-10-30, already in the lock).
+# `default-features = false` drops the HTML renderer and `getopts`: the preview
+# is an attribute tree, so no code path of the graph turns Markdown into HTML.
+pulldown-cmark = { version = "=0.13.4", default-features = false }
+unicode-normalization = "=0.1.25"
 
 # Release profile of the notebook-core wasm build. Without it the module is
 # larger and keeps a `name` section whose symbol hashes follow the checkout

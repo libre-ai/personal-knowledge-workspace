@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "p04-bridge-wire.v1",
+  "commands": [
+    "open_vault",
+    "read_note",
+    "write_note",
+    "render_preview",
+    "search",
+    "rebuild_index"
+  ],
+  "headers": {
+    "path": "x-vault-path",
+    "revision": "x-vault-revision"
+  },
+  "readFramePrefixBytes": 64,
+  "event": "vault_changed",
+  "refusalCodes": [
+    "vault.invalid_vault",
+    "vault.invalid_path",
+    "vault.not_found",
+    "vault.revision_conflict",
+    "vault.invalid_revision",
+    "vault.too_large",
+    "vault.not_utf8",
+    "vault.invalid_query",
+    "vault.index_missing",
+    "vault.io",
+    "vault.not_open",
+    "vault.invalid_request"
+  ]
+}

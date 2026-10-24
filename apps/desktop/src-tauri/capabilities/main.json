@@ -3,5 +3,13 @@
   "identifier": "main",
   "description": "Rights of the front: one entry per command of build.rs, nothing else.",
   "windows": ["main"],
-  "permissions": ["allow-shell-ping"]
+  "permissions": [
+    "allow-shell-ping",
+    "allow-open-vault",
+    "allow-read-note",
+    "allow-write-note",
+    "allow-render-preview",
+    "allow-search",
+    "allow-rebuild-index"
+  ]
 }
