@@ -393,13 +393,15 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   L'élément `AXFocusedUIElement` de l'application est lu aussi, par les mêmes attributs, et
   consigné à côté, sans verdict.
 - **Attributs et appels lus** : `AXRole` et `AXSubrole` (consignés). Le texte de l'élément est
-  pris par la première des trois lectures qui s'applique, dans cet ordre : (1) l'élément porte
-  `AXNumberOfCharacters` : son texte est `AXValue`, ou, si `AXValue` est absent ou plus court que
-  `AXNumberOfCharacters`, la lecture par l'attribut paramétré `AXStringForRange` par tranches de
-  `ax-string-range-chars` (§ 1) caractères jusqu'à `AXNumberOfCharacters` ; (2) sinon, son
-  `AXValue` est une chaîne non vide : son texte est cette chaîne ; (3) sinon, son texte est la
-  concaténation, dans l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle
-  `AXStaticText`. Le rapport consigne laquelle des trois lectures a donné le texte. Tous les appels
+  pris ainsi : (1) si l'élément porte `AXNumberOfCharacters`, son texte est `AXValue`, ou, si
+  `AXValue` est absent ou plus court que `AXNumberOfCharacters`, la lecture par l'attribut
+  paramétré `AXStringForRange` par tranches de `ax-string-range-chars` (§ 1) caractères jusqu'à
+  `AXNumberOfCharacters` ; sinon, deux lectures sont faites et consignées, (2) l'`AXValue` de
+  l'élément s'il est une chaîne, et (3) la concaténation, dans l'ordre du même parcours, de
+  l'`AXValue` de ses descendants de rôle `AXStaticText` ; son texte est la plus longue des deux en
+  unités UTF-16, (2) à longueur égale. Le choix ne compare rien au texte de référence : une
+  lecture tronquée par l'une des deux formes ne masque pas le texte entier porté par l'autre. Le
+  rapport consigne laquelle des trois lectures a donné le texte. Tous les appels
   passent par `AXUIElementCopyAttributeValue` et `AXUIElementCopyParameterizedAttributeValue`. Les
   rôles et attributs que WebKit donne à cette copie ne sont pas mesurés à ce commit (l'autorisation
   Accessibilité manquait) : ces trois lectures sont fixées avant mesure sans que leur couverture
