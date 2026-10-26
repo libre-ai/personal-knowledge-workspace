@@ -399,12 +399,14 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   `AXNumberOfCharacters` ; (2) l'`AXValue` de l'élément s'il est une chaîne ; (3) la
   concaténation, dans l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle
   `AXStaticText`. Codes rendus par un appel, pendant une lecture comme pendant le parcours, classés
-  d'après `HIServices/AXError.h` : l'attribut est absent quand l'appel rend `kAXErrorNoValue`,
-  `kAXErrorAttributeUnsupported`, `kAXErrorParameterizedAttributeUnsupported` ou
-  `kAXErrorNotImplemented` (« the process does not fully support the accessibility API ») : ce
-  sont des propriétés du produit mesuré ; `kAXErrorAPIDisabled` est l'autorisation manquante du
-  premier point, la mesure du lancement n'a pas lieu et le verdict est indisponible ; tout autre
-  code est une `instrument-error` (§ 10.7). Une lecture qui ne s'applique pas
+  d'après `HIServices/AXError.h` et `HIServices/AXUIElement.h` du SDK macOS : l'attribut est
+  absent quand l'appel rend `kAXErrorNoValue`, `kAXErrorAttributeUnsupported`,
+  `kAXErrorParameterizedAttributeUnsupported` ou `kAXErrorNotImplemented` (« The process does not
+  fully support the accessibility API », `AXUIElement.h`) : ce sont des propriétés du produit
+  mesuré ; `kAXErrorAPIDisabled` est l'autorisation manquante du premier point, à quelque moment
+  du lancement qu'il soit rendu : la mesure n'a pas lieu et son verdict est indisponible ; tout
+  autre code est une `instrument-error` (§ 10.7), sauf si la coquille est sortie, ce que le
+  harnais lit avant de classer le code (`shell-exited`, § 10.7). Une lecture qui ne s'applique pas
   (attribut absent, aucun descendant) vaut le texte vide, et un descendant dont l'`AXValue` est
   absent ou n'est pas une chaîne y contribue le texte vide. La proportion du § 8 est calculée pour
   chacune des trois ; la mesure est la plus haute des trois proportions, celle du texte que l'API
@@ -447,8 +449,9 @@ pour l'une des causes de cet ensemble fermé :
   chaque échantillon et à chaque événement `visibilitychange` ;
 - `shell-exited` : le processus de la coquille sort avant la fin prévue de la passe, de la
   configuration ou du lancement (sortie du processus fils observée par le harnais) ; cette lecture
-  précède celle du premier plan, de sorte qu'une coquille morte n'est jamais lue
-  `shell-not-frontmost` ;
+  précède celle du premier plan et le classement d'un code d'erreur de l'API d'accessibilité
+  (§ 10.6), de sorte qu'une coquille morte n'est jamais lue `shell-not-frontmost` ni
+  `instrument-error` ;
 - `shell-not-frontmost` : au moment d'une frappe système, l'application au premier plan n'est pas
   la coquille, lu par le harnais juste avant chaque `CGEventPost` comme
   `NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier` différent du pid de la
