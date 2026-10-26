@@ -398,10 +398,14 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   paramétré `AXStringForRange` par tranches de `ax-string-range-chars` (§ 1) caractères jusqu'à
   `AXNumberOfCharacters` ; (2) l'`AXValue` de l'élément s'il est une chaîne ; (3) la
   concaténation, dans l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle
-  `AXStaticText`. Une lecture qui ne s'applique pas (attribut absent, aucun descendant) vaut le
-  texte vide. La proportion du § 8 est calculée pour chacune des trois ; la mesure est la plus
-  haute, le texte que l'API restitue par au moins une des lectures fixées ici, et une lecture
-  tronquée, préfixée ou dans un autre ordre ne masque donc pas une autre qui restitue la note. Le
+  `AXStaticText`. Un attribut est absent quand l'appel rend `kAXErrorNoValue` ou
+  `kAXErrorAttributeUnsupported` ; tout autre code d'erreur d'un appel, pendant une lecture comme
+  pendant le parcours, est une `instrument-error` (§ 10.7). Une lecture qui ne s'applique pas
+  (attribut absent, aucun descendant) vaut le texte vide, et un descendant dont l'`AXValue` est
+  absent ou n'est pas une chaîne y contribue le texte vide. La proportion du § 8 est calculée pour
+  chacune des trois ; la mesure est la plus haute des trois proportions, celle du texte que l'API
+  restitue par au moins une des lectures fixées ici, et une lecture tronquée, préfixée ou dans un
+  autre ordre ne masque donc pas une autre qui restitue la note. Le
   rapport consigne les trois proportions, leurs longueurs en unités UTF-16, et laquelle donne la
   mesure (la première dans l'ordre (1), (2), (3) à proportion égale). Tous les appels passent par
   `AXUIElementCopyAttributeValue` et `AXUIElementCopyParameterizedAttributeValue`. Les rôles et
