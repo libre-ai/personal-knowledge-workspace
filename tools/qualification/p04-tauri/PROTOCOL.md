@@ -45,8 +45,10 @@ Les champs de ce tableau sont lus par `protocol.test.ts` ; la colonne « Champ �
 | `nfr-10-hold-ms` | 5000 |
 | `save-timeout-ms` | 10000 |
 | `at-01-key-gap-ms` | 20 |
+| `nfr-03-end-timeout-ms` | 2000 |
+| `frame-period-intervals` | 600 |
 
-Les huit dernières lignes sont des paramètres de procédure du § 10, ajoutés avant la première
+Les dix dernières lignes sont des paramètres de procédure du § 10, ajoutés avant la première
 mesure ; ce ne sont ni des seuils ni des effectifs.
 
 ## 2. Effectifs
@@ -204,8 +206,8 @@ Le rapport consigne, par configuration d'AT-02, l'écart entre l'observation du 
 borne de fin (nombre, p50, p95, maximum), ce qui distingue cette borne de toute autre ; pour
 chaque lancement de NFR-03, le nombre de rappels demandés jusqu'à la borne. La période de trame est
 relevée au début de chaque lancement d'AT-02 et de NFR-03, avant toute frappe et avant l'ouverture
-mesurée : 600 intervalles entre rappels `requestAnimationFrame` successifs, dont le nombre, le
-p50, le p95 et le maximum sont consignés. Pendant les frappes d'AT-02, le script ne demande aucun
+mesurée : `frame-period-intervals` (§ 1) intervalles entre rappels `requestAnimationFrame`
+successifs, dont le nombre, le p50, le p95 et le maximum sont consignés. Pendant les frappes d'AT-02, le script ne demande aucun
 rappel `requestAnimationFrame` en dehors de ceux de la borne de fin : le relevé qui a fondé cette
 définition a été fait page au repos, et une boucle de rappels continue cale le rendu sur les
 trames, de sorte qu'un changement attendrait la trame suivante (inféré, non mesuré). Cette règle ne
@@ -276,15 +278,20 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
 - **Borne de début** : `performance.now()` juste avant que le script d'instrumentation soumette le
   formulaire d'ouverture de la note (`#open-form`, `requestSubmit()`).
 - **Borne de fin** : l'instant peint (§ 10.1) du premier état où l'éditeur est monté et où la zone
-  visible est rendue. La zone visible est la boîte du défileur de l'éditeur (`.cm-scroller`). Elle
+  visible est rendue. Dans la coquille, le défileur de l'éditeur (`.cm-scroller`) ne défile pas : il
+  prend la hauteur de toute la note (aucune hauteur n'est imposée à `.cm-editor` ni à `#editor`,
+  `apps/desktop/src/editor/styles.ts`, `apps/desktop/src/style.css`), et c'est la fenêtre qui
+  défile ; relevé du 2026-10-24, essai hors série sur la note de 1 Mio : boîte du défileur de 80 à
+  761 063 px, 28 lignes rendues. La zone visible est donc l'intersection de la boîte du défileur
+  avec la fenêtre, de 0 à `window.innerHeight` en coordonnées de `getBoundingClientRect()`. Elle
   est rendue quand les éléments de ligne de l'éditeur (`.cm-line`) dont la boîte coupe cette zone
   sont, dans l'ordre, les lignes 1 à `k` de la note (`k` au moins 1), chacun portant le texte de la
   ligne de même rang de la note, et quand le bas de la boîte de la ligne `k` est au bas de la zone
-  ou au-delà (la ligne `k` peut être coupée par le bas du défileur), ou que `k` est la dernière
+  ou au-delà (la ligne `k` peut être coupée par le bas de la zone), ou que `k` est la dernière
   ligne de la note. La note est ouverte en haut (ligne 1 en tête). C'est le rendu de la zone visible
   d'abord admis par le § 3 ; le reste de la note n'est pas attendu. Si cet état n'est pas observé
-  2 000 ms après la borne de début, l'échantillon du lancement vaut +oo, comme une frappe non rendue
-  (§ 5) : il reste dans l'échantillon et le lancement n'est pas refait.
+  `nfr-03-end-timeout-ms` (§ 1) après la borne de début, l'échantillon du lancement vaut +oo, comme
+  une frappe non rendue (§ 5) : il reste dans l'échantillon et le lancement n'est pas refait.
 - **Aperçu actif** : l'extension d'aperçu est montée à l'ouverture ; ses marques, calculées après
   `preview-delay-ms`, ne sont pas attendues par la borne de fin (même lecture que la décision
   « Caractère tapé peint » pour AT-02 : l'aperçu travaille en arrière-plan).
@@ -365,13 +372,25 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   focus. Le processus qui lit doit être autorisé par macOS dans Réglages, Confidentialité et
   sécurité, Accessibilité (`AXIsProcessTrusted()` vrai) ; sans cette autorisation, la mesure n'a pas
   lieu et le rapport le dit (verdict indisponible, jamais un zéro ni un vert).
-- **Élément lu** : `AXUIElementCreateApplication(pid)` sur le processus de la coquille, puis
-  l'attribut `AXFocusedUIElement` de l'application, l'éditeur ayant le focus.
-- **Attributs et appels lus** : `AXRole` (consigné) ; `AXNumberOfCharacters` ; `AXValue` ; si
-  `AXValue` est absent ou plus court que `AXNumberOfCharacters`, le texte est lu par
-  l'attribut paramétré `AXStringForRange`, par tranches de 10 000 caractères jusqu'à
-  `AXNumberOfCharacters`. Tous les appels passent par `AXUIElementCopyAttributeValue` et
-  `AXUIElementCopyParameterizedAttributeValue`.
+- **Élément lu** : l'élément de contenu de l'éditeur, qui a le focus, ne porte que les lignes que
+  CodeMirror dessine ; la note entière est exposée par la copie du paquet WP-8, un élément de rôle
+  ARIA `document` nommé « Note text, whole note, read only », hors de l'élément de contenu et sans
+  focus. L'élément lu est celui-ci : depuis `AXUIElementCreateApplication(pid)` sur le processus de
+  la coquille, puis `AXWindows`, l'arbre est parcouru en profondeur par `AXChildren`, dans l'ordre,
+  et l'élément lu est le premier dont `AXDescription` ou `AXTitle` vaut ce nom. Aucun élément de ce
+  nom : la proportion vaut 0 (le texte n'est pas exposé), ce n'est pas une mesure indisponible.
+  L'élément `AXFocusedUIElement` de l'application est lu aussi, par les mêmes attributs, et
+  consigné à côté, sans verdict.
+- **Attributs et appels lus** : `AXRole` et `AXSubrole` (consignés) ; si l'élément porte
+  `AXNumberOfCharacters`, son texte est `AXValue`, ou, si `AXValue` est absent ou plus court que
+  `AXNumberOfCharacters`, la lecture par l'attribut paramétré `AXStringForRange` par tranches de
+  10 000 caractères jusqu'à `AXNumberOfCharacters` ; sinon, son texte est la concaténation, dans
+  l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle `AXStaticText`. Le rapport
+  consigne laquelle des deux lectures a donné le texte. Tous les appels passent par
+  `AXUIElementCopyAttributeValue` et `AXUIElementCopyParameterizedAttributeValue`. Les rôles et
+  attributs que WebKit donne à cette copie ne sont pas mesurés à ce commit (l'autorisation
+  Accessibilité manquait) : la lecture ci-dessus couvre les deux formes possibles, et aucune autre
+  n'est substituée sans révision de ce protocole avant mesure.
 - **Unité de caractère** : l'unité de code UTF-16, celle des chaînes de l'API d'accessibilité. Le
   texte de référence est le fichier décodé en UTF-8 strict, marque d'ordre des octets gardée, en
   unités UTF-16 ; la proportion du § 8 compte les unités égales à la même position.
