@@ -387,8 +387,8 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   la coquille, puis `AXWindows`, l'arbre est parcouru en profondeur par `AXChildren`, dans l'ordre,
   et l'élément lu est le premier dont `AXDescription` ou `AXTitle` vaut ce nom. Aucun élément de ce
   nom au terme du parcours : la proportion vaut 0 (le texte n'est pas exposé), ce n'est pas une
-  mesure indisponible ; une erreur de l'API pendant le parcours est une `instrument-error`
-  (§ 10.7). Le rapport consigne, à part de la proportion, si l'élément a été trouvé et le nombre
+  mesure indisponible ; un code d'erreur rendu pendant le parcours est classé comme au point
+  suivant. Le rapport consigne, à part de la proportion, si l'élément a été trouvé et le nombre
   d'éléments parcourus, pour qu'un 0 par élément introuvable se distingue d'un 0 par texte.
   L'élément `AXFocusedUIElement` de l'application est lu aussi, par les mêmes attributs, et
   consigné à côté, sans verdict.
@@ -398,9 +398,13 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   paramétré `AXStringForRange` par tranches de `ax-string-range-chars` (§ 1) caractères jusqu'à
   `AXNumberOfCharacters` ; (2) l'`AXValue` de l'élément s'il est une chaîne ; (3) la
   concaténation, dans l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle
-  `AXStaticText`. Un attribut est absent quand l'appel rend `kAXErrorNoValue` ou
-  `kAXErrorAttributeUnsupported` ; tout autre code d'erreur d'un appel, pendant une lecture comme
-  pendant le parcours, est une `instrument-error` (§ 10.7). Une lecture qui ne s'applique pas
+  `AXStaticText`. Codes rendus par un appel, pendant une lecture comme pendant le parcours, classés
+  d'après `HIServices/AXError.h` : l'attribut est absent quand l'appel rend `kAXErrorNoValue`,
+  `kAXErrorAttributeUnsupported`, `kAXErrorParameterizedAttributeUnsupported` ou
+  `kAXErrorNotImplemented` (« the process does not fully support the accessibility API ») : ce
+  sont des propriétés du produit mesuré ; `kAXErrorAPIDisabled` est l'autorisation manquante du
+  premier point, la mesure du lancement n'a pas lieu et le verdict est indisponible ; tout autre
+  code est une `instrument-error` (§ 10.7). Une lecture qui ne s'applique pas
   (attribut absent, aucun descendant) vaut le texte vide, et un descendant dont l'`AXValue` est
   absent ou n'est pas une chaîne y contribue le texte vide. La proportion du § 8 est calculée pour
   chacune des trois ; la mesure est la plus haute des trois proportions, celle du texte que l'API
@@ -449,8 +453,9 @@ pour l'une des causes de cet ensemble fermé :
   la coquille, lu par le harnais juste avant chaque `CGEventPost` comme
   `NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier` différent du pid de la
   coquille ;
-- `instrument-error` : une différence négative (§ 10.2), ou une erreur du harnais ou du script
-  d'instrumentation lui-même (exception, relevé illisible), consignée avec son message.
+- `instrument-error` : une différence négative (§ 10.2), une erreur du harnais ou du script
+  d'instrumentation lui-même (exception, relevé illisible), ou un code d'erreur d'un appel de l'API
+  d'accessibilité que le § 10.6 classe ainsi, consignée avec son message ou son code.
 
 `series-stop-consecutive` (§ 1, trois) rejets ou interruptions consécutifs de même cause arrêtent
 la série : elle est consignée avec cette cause, sans verdict. `shell-exited` y est nommé défaut
