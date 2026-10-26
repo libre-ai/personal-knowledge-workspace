@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import { evaluate, type RawBody } from "./evaluate";
 import type { MachineRecord } from "./manifest";
-import { type MeasureSpec, measureSpecs, readProtocol } from "./protocol";
+import { type MeasureSpec, measureSpecs, readProtocol, seriesParameters } from "./protocol";
 import { framePeriodOf, manifestOf, measuredWithOf, rawOf } from "./report";
 
 const WITH = {
@@ -20,6 +20,7 @@ const WITH = {
 
 const repositoryRoot = join(import.meta.dir, "..", "..", "..", "..");
 const specs = measureSpecs(readProtocol(repositoryRoot));
+const parameters = seriesParameters(readProtocol(repositoryRoot));
 const scratch = mkdtempSync(join(tmpdir(), "p04-report-"));
 afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 
@@ -34,7 +35,16 @@ describe("a raw output written by the harness carries its identity (review of #4
       memory: { kind: "memory", unit: "Mio", launches: [] },
       "round-trip": { kind: "round-trip", passes: [] },
       "paragraph-edit": { kind: "paragraph-edit", editableFiles: 1, passes: [] },
-      accessibility: { kind: "accessibility", role: "AXTextArea", total: 0, matching: 0 },
+      accessibility: {
+        kind: "accessibility",
+        total: 0,
+        matching: 0,
+        found: false,
+        visited: 0,
+        chosen: null,
+        element: null,
+        focused: null,
+      },
     };
     for (const spec of specs) {
       const raw = rawOf(spec, empty[spec.kind], [], WITH);
@@ -70,18 +80,28 @@ describe("a raw output written by the harness carries its identity (review of #4
 });
 
 describe("the frame period reported at the start of a launch (PROTOCOL.md section 10.1)", () => {
-  test("a report of 600 intervals is kept as it is", () => {
-    const event = { seq: 9, type: "frames", intervals: 600, p50Ms: 17, p95Ms: 18, maxMs: 25 };
-    expect(framePeriodOf(event)).toEqual({ intervals: 600, p50Ms: 17, p95Ms: 18, maxMs: 25 });
+  const intervals = parameters.framePeriodIntervals;
+
+  test("a report of frame-period-intervals intervals is kept as it is", () => {
+    const event = { seq: 9, type: "frames", intervals, p50Ms: 17, p95Ms: 18, maxMs: 25 };
+    expect(framePeriodOf(event, intervals)).toEqual({ intervals, p50Ms: 17, p95Ms: 18, maxMs: 25 });
+  });
+
+  test("the count required is the one given by the protocol, not a constant", () => {
+    const event = { intervals: 599, p50Ms: 17, p95Ms: 18, maxMs: 25 };
+    expect(framePeriodOf(event, 599)).toEqual(event);
+    expect(() => framePeriodOf({ ...event, intervals: 600 }, 599)).toThrow(
+      "the protocol reads 599",
+    );
   });
 
   test("another count of intervals, or a missing statistic, is an instrument error", () => {
-    expect(() => framePeriodOf({ intervals: 599, p50Ms: 17, p95Ms: 18, maxMs: 25 })).toThrow(
-      "the protocol reads 600",
-    );
-    expect(() => framePeriodOf({ intervals: 600, p50Ms: 17, p95Ms: null, maxMs: 25 })).toThrow(
-      "incomplete frame period",
-    );
+    expect(() =>
+      framePeriodOf({ intervals: intervals - 1, p50Ms: 17, p95Ms: 18, maxMs: 25 }, intervals),
+    ).toThrow(`the protocol reads ${intervals}`);
+    expect(() =>
+      framePeriodOf({ intervals, p50Ms: 17, p95Ms: null, maxMs: 25 }, intervals),
+    ).toThrow("incomplete frame period");
   });
 });
 

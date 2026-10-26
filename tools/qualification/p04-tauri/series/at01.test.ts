@@ -93,7 +93,7 @@ const recorder = (): Recorder => ({ log: [], copies: 0, disposed: 0 });
 describe("AT-01 pass: two launches on one copy (PROTOCOL.md section 10.5)", () => {
   test("the edit launch runs after the round trip, on the same copy, and a pass gives both lines", async () => {
     const record = recorder();
-    const series = await at01Series(2, true, steps(record, {}), [], new Streak());
+    const series = await at01Series(2, true, steps(record, {}), [], new Streak(3));
     expect(record.copies).toBe(2);
     expect(record.disposed).toBe(2);
     const [copy, roundTrip, edit] = record.log;
@@ -120,7 +120,7 @@ describe("AT-01 pass: two launches on one copy (PROTOCOL.md section 10.5)", () =
       true,
       steps(record, { roundTrip: (vault) => write(vault, "notes/c.bin", new Uint8Array([0x00])) }),
       [],
-      new Streak(),
+      new Streak(3),
     );
     expect(series.roundTrip).toEqual([
       { examined: 3, identical: 2, changed: 1, missing: 0, added: 0 },
@@ -143,7 +143,7 @@ describe("AT-01 pass: two launches on one copy (PROTOCOL.md section 10.5)", () =
         },
       }),
       interruptions,
-      new Streak(),
+      new Streak(3),
     );
     expect(interruptions).toEqual([
       { unit: "at-01 pass 0", attempt: 1, cause: "page-hidden", reason: "window hidden" },
@@ -156,7 +156,7 @@ describe("AT-01 pass: two launches on one copy (PROTOCOL.md section 10.5)", () =
 
   test("without the edit (a trial of the round trip alone), no edit launch is made", async () => {
     const record = recorder();
-    const series = await at01Series(1, false, steps(record, {}), [], new Streak());
+    const series = await at01Series(1, false, steps(record, {}), [], new Streak(3));
     expect(record.log.some((line) => line.startsWith("edit:"))).toBe(false);
     expect(series.edit).toEqual([]);
     expect(series.roundTrip).toHaveLength(1);
@@ -173,7 +173,7 @@ describe("AT-01 pass: two launches on one copy (PROTOCOL.md section 10.5)", () =
         },
       }),
       [],
-      new Streak(),
+      new Streak(3),
     );
     await expect(run).rejects.toBeInstanceOf(Unavailable);
     expect(record.copies).toBe(1);

@@ -38,12 +38,15 @@ export class SeriesStopped extends Error {
   }
 }
 
-export const CONSECUTIVE_TO_STOP = 3;
-
-/** The run of consecutive rejections and interruptions of one cause, over the whole series. */
+/**
+ * The run of consecutive rejections and interruptions of one cause, over the
+ * whole series. `consecutive` is `series-stop-consecutive` of PROTOCOL.md section 1.
+ */
 export class Streak {
   #cause: StopCause | null = null;
   #count = 0;
+
+  constructor(readonly consecutive: number) {}
 
   /** Records one rejection or interruption; the third of one cause in a row throws SeriesStopped. */
   record(cause: StopCause, unit: string): void {
@@ -52,7 +55,7 @@ export class Streak {
       this.#cause = cause;
       this.#count = 1;
     }
-    if (this.#count >= CONSECUTIVE_TO_STOP) throw new SeriesStopped(cause, unit);
+    if (this.#count >= this.consecutive) throw new SeriesStopped(cause, unit);
   }
 
   /** A completed pass, configuration or launch ends the run. */

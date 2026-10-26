@@ -214,17 +214,22 @@ export const OPEN_BOUND_SOURCE = `
 
 /**
  * NFR-03, the visible area rendered (PROTOCOL.md section 10.3), as a function of
- * the shadow root of the editor: null while there is no scroller, "shown" when
- * the line elements that intersect the scroller are lines 1 to k of the note,
- * in order, with their text, and the bottom of line k is at the bottom of the
- * area or beyond, or k is the last line; "short-plan" when more lines are
- * visible than the plan carries.
+ * the shadow root of the editor and of the height of the window: the area runs
+ * from max(0, top of the scroller) to min(window height, bottom of the scroller),
+ * in getBoundingClientRect() coordinates. Null while there is no scroller,
+ * "shown" when the line elements that intersect the area are lines 1 to k of
+ * the note, in order, with their text, and the bottom of line k is at the
+ * bottom of the area or beyond, or k is the last line; "short-plan" when more
+ * lines are visible than the plan carries.
  */
 export const VISIBLE_AREA_SOURCE = `
-  const visibleArea = (root, firstLines, lineCount) => {
+  const visibleArea = (root, firstLines, lineCount, viewportHeight) => {
     const scroller = root && root.querySelector(".cm-scroller");
     if (!scroller) return null;
-    const area = scroller.getBoundingClientRect();
+    // The scroller takes the height of the whole note and the window scrolls: the
+    // visible area is the part of its box the window shows.
+    const box = scroller.getBoundingClientRect();
+    const area = { top: Math.max(0, box.top), bottom: Math.min(viewportHeight, box.bottom) };
     const lines = Array.from(root.querySelectorAll(".cm-content .cm-line")).filter((line) => {
       const box = line.getBoundingClientRect();
       return box.bottom > area.top && box.top < area.bottom;
@@ -413,7 +418,7 @@ ${VISIBLE_AREA_SOURCE}
     await sleep(0);
     const start = performance.now();
     const pending = paintedWhen(start, () => {
-      const state = visibleArea(editorRoot(), PLAN.firstLines, PLAN.lineCount);
+      const state = visibleArea(editorRoot(), PLAN.firstLines, PLAN.lineCount, window.innerHeight);
       if (state === null) return problem() !== "" ? "refused" : false;
       return state;
     }, PLAN.timeoutMs);

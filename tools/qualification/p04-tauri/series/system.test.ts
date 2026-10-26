@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { exposedProportion } from "./ax";
+import { exposedProportion } from "./ax-read";
 import { KEY_CODES, keyCodeOf } from "./keys";
 import { attributeHelpers, HELPER_NAMES, parseProcessTable, rssMib, webKitHelpers } from "./memory";
 import { readProtocol, seriesParameters } from "./protocol";

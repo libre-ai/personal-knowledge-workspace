@@ -23,7 +23,7 @@ function fake(rejections: (RejectionCause | null)[]): Fake {
     log,
     context: {
       rejected: { "session-locked": 0, "display-asleep": 0, "helpers-unattributed": 0 },
-      streak: new Streak(),
+      streak: new Streak(3),
       unit: "nfr-10 launch 0",
     },
     steps: {

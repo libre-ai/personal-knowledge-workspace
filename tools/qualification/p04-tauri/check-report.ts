@@ -40,7 +40,6 @@ import {
   type StopCause,
 } from "./series/manifest";
 import {
-  FRAME_PERIOD_INTERVALS,
   type MeasureSpec,
   measureSpecs,
   PROTOCOL_RELATIVE_PATH,
@@ -220,7 +219,7 @@ function measuredWithIssues(
 
 // PROTOCOL.md section 10.1: one frame period of 600 intervals per launch of AT-02
 // and NFR-03, none for the other measures, each with p50 <= p95 <= maximum.
-function framePeriodIssues(spec: MeasureSpec, value: unknown): string[] {
+function framePeriodIssues(spec: MeasureSpec, value: unknown, intervals: number): string[] {
   if (!Array.isArray(value)) return [`${spec.id}: framePeriods is not recorded`];
   if (value.length !== spec.framedLaunches) {
     return [`${spec.id}: ${value.length} frame periods for ${spec.framedLaunches} launches`];
@@ -234,7 +233,7 @@ function framePeriodIssues(spec: MeasureSpec, value: unknown): string[] {
     };
     const [p50, p95, max] = [statistic("p50Ms"), statistic("p95Ms"), statistic("maxMs")];
     if (
-      period?.intervals !== FRAME_PERIOD_INTERVALS ||
+      period?.intervals !== intervals ||
       p50 === null ||
       p95 === null ||
       max === null ||
@@ -242,7 +241,7 @@ function framePeriodIssues(spec: MeasureSpec, value: unknown): string[] {
       p95 > max
     ) {
       issues.push(
-        `${spec.id}: frame period of launch ${index} is not ${FRAME_PERIOD_INTERVALS} intervals with p50 <= p95 <= maximum`,
+        `${spec.id}: frame period of launch ${index} is not ${intervals} intervals with p50 <= p95 <= maximum`,
       );
     }
   });
@@ -276,6 +275,7 @@ function checkReport(
     classes: NotebookResourceClassManifest;
     protocolSha256: string;
     protocolCommit: string;
+    framePeriodIntervals: number;
   },
   outcome: Outcome,
 ): void {
@@ -386,7 +386,7 @@ function checkReport(
     }
     const recorded = [
       ...measuredWithIssues(spec, raw, run),
-      ...framePeriodIssues(spec, entry.framePeriods),
+      ...framePeriodIssues(spec, entry.framePeriods, context.framePeriodIntervals),
       ...boundGapIssues(spec, entry.boundGap, raw),
     ];
     if (recorded.length > 0) {
@@ -484,6 +484,7 @@ export function main(argv: readonly string[]): number {
           classes,
           protocolSha256: frozen.sha256,
           protocolCommit: frozen.commit,
+          framePeriodIntervals: parameters.framePeriodIntervals,
         },
         outcome,
       );

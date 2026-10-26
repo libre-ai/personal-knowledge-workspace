@@ -35,6 +35,18 @@ export interface SeriesParameters {
   readonly nfr10HoldMs: number;
   readonly saveTimeoutMs: number;
   readonly at01KeyGapMs: number;
+  /** Section 10.3: the NFR-03 end state not observed this long after the start bound is +oo. */
+  readonly nfr03EndTimeoutMs: number;
+  /** Section 10.1: intervals of the frame period read at the start of an AT-02 or NFR-03 launch. */
+  readonly framePeriodIntervals: number;
+  /** Section 10.2: the page blocks its main thread this long in the start-bound control... */
+  readonly timestampControlBlockMs: number;
+  /** ...and the latency measured must be at least this. */
+  readonly timestampControlMinLatencyMs: number;
+  /** Section 10.6: UTF-16 units per AXStringForRange slice. */
+  readonly axStringRangeChars: number;
+  /** Section 10.7: rejections or interruptions of one cause in a row that stop the series. */
+  readonly seriesStopConsecutive: number;
 }
 
 function field(fields: ReadonlyMap<string, string>, key: string): string {
@@ -76,6 +88,12 @@ export function seriesParameters(markdown: string): SeriesParameters {
     nfr10HoldMs: integer(fields, "nfr-10-hold-ms"),
     saveTimeoutMs: integer(fields, "save-timeout-ms"),
     at01KeyGapMs: integer(fields, "at-01-key-gap-ms"),
+    nfr03EndTimeoutMs: integer(fields, "nfr-03-end-timeout-ms"),
+    framePeriodIntervals: integer(fields, "frame-period-intervals"),
+    timestampControlBlockMs: integer(fields, "timestamp-control-block-ms"),
+    timestampControlMinLatencyMs: integer(fields, "timestamp-control-min-latency-ms"),
+    axStringRangeChars: integer(fields, "ax-string-range-chars"),
+    seriesStopConsecutive: integer(fields, "series-stop-consecutive"),
   };
 }
 
@@ -105,13 +123,6 @@ export interface MeasureSpec {
   /** The launches that read a frame period at their start (section 10.1): 1 per AT-02 configuration, 1 per NFR-03 sample, 0 elsewhere. */
   readonly framedLaunches: number;
 }
-
-/**
- * Section 10.1: "600 intervalles entre rappels requestAnimationFrame successifs".
- * The number is in the prose of the protocol, not in its field table;
- * `protocol.test.ts` checks that the prose still says it.
- */
-export const FRAME_PERIOD_INTERVALS = 600;
 
 function limitOf(threshold: string, pattern: RegExp, measure: string): number {
   const value = pattern.exec(threshold)?.[1];

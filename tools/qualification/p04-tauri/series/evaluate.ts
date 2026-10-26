@@ -12,6 +12,7 @@
 // is red. A measure can never pass for want of a sample.
 
 import type { Interruption } from "./attempts";
+import { type AccessibilityMeasure, chosenReading, type ReadingRecord } from "./ax-read";
 import { INTERRUPTION_CAUSES, type MeasuredWith } from "./manifest";
 import type { MeasureId, MeasureSpec } from "./protocol";
 import { maximum, nearestRankP95, type Sample } from "./stats";
@@ -76,7 +77,7 @@ export type RawBody =
   | { kind: "memory"; unit: "Mio"; launches: MemoryLaunch[] }
   | { kind: "round-trip"; passes: RoundTripPass[] }
   | { kind: "paragraph-edit"; editableFiles: number; passes: EditPass[] }
-  | { kind: "accessibility"; role: string; total: number; matching: number }
+  | ({ kind: "accessibility" } & AccessibilityMeasure)
   | { kind: "unavailable"; reason: string };
 
 export type RawOutput = Identity & RawBody;
@@ -258,12 +259,50 @@ function paragraphEdit(spec: MeasureSpec, raw: Record<string, unknown>): Evaluat
   };
 }
 
+// AXRole and AXSubrole are recorded (a string, or null when absent), and the three
+// readings of section 10.6 in their order, each with its length and its matching units.
+function elementRecord(value: unknown, what: string, total: number): ReadingRecord[] {
+  const element = record(value, what);
+  for (const key of ["role", "subrole"]) {
+    if (!(key in element) || (element[key] !== null && typeof element[key] !== "string")) {
+      throw new Incomplete(`${what}: ${key} is not recorded`);
+    }
+  }
+  return list(element.readings, `readings of ${what}`, 3).map((entry, index) => {
+    const reading = record(entry, `reading ${index + 1} of ${what}`);
+    if (reading.reading !== index + 1)
+      throw new Incomplete(`${what}: readings are not in the order (1), (2), (3)`);
+    count(reading.length, `length of reading ${index + 1} of ${what}`);
+    const matching = count(reading.matching, `matching units of reading ${index + 1} of ${what}`);
+    if (matching > total) throw new Incomplete(`${what}: more matching units than reference units`);
+    return { reading: (index + 1) as 1 | 2 | 3, length: Number(reading.length), matching };
+  });
+}
+
+// PROTOCOL.md sections 8 and 10.6: the measure is the highest of the three
+// proportions of the copy of the note (the first in order at equality); a copy not
+// found gives 0, recorded apart with the elements walked.
 function accessibility(spec: MeasureSpec, raw: Record<string, unknown>): Evaluation {
-  if (typeof raw.role !== "string") throw new Incomplete("accessibility role is not recorded");
   const total = count(raw.total, "reference UTF-16 units");
   const matching = count(raw.matching, "matching UTF-16 units");
   if (total === 0) throw new Incomplete("the reference text is empty");
   if (matching > total) throw new Incomplete("more matching units than reference units");
+  if (typeof raw.found !== "boolean")
+    throw new Incomplete("whether the copy was found is not recorded");
+  count(raw.visited, "elements walked");
+  if (raw.focused !== null) elementRecord(raw.focused, "the focused element", total);
+  if (!raw.found) {
+    if (matching !== 0 || raw.chosen !== null || raw.element !== null) {
+      throw new Incomplete("a copy not found gives 0, no reading and no element");
+    }
+  } else {
+    const best = chosenReading(elementRecord(raw.element, "the copy", total));
+    if (best === null || raw.chosen !== best.reading || matching !== best.matching) {
+      throw new Incomplete(
+        `the measure is not the highest of the three readings (first in order at equality): ${String(raw.chosen)}, ${matching}`,
+      );
+    }
+  }
   const value = (100 * matching) / total;
   return { ok: true, value, verdict: value >= spec.limit ? "pass" : "fail", examined: 1 };
 }

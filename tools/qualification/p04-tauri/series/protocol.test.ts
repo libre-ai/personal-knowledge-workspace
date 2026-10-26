@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { FRAME_PERIOD_INTERVALS, measureSpecs, readProtocol, seriesParameters } from "./protocol";
+import { measureSpecs, readProtocol, seriesParameters } from "./protocol";
 
 const repositoryRoot = join(import.meta.dir, "..", "..", "..", "..");
 const protocol = readProtocol(repositoryRoot);
@@ -32,6 +32,35 @@ describe("series parameters come from PROTOCOL.md", () => {
     expect(parameters.nfr10HoldMs).toBe(5000);
     expect(parameters.saveTimeoutMs).toBe(10000);
     expect(parameters.at01KeyGapMs).toBe(20);
+  });
+
+  // PROTOCOL.md section 1 as merged with #48: six procedure fields, no constant of the harness.
+  test("the six fields added by #48", () => {
+    expect(parameters.nfr03EndTimeoutMs).toBe(2000);
+    expect(parameters.framePeriodIntervals).toBe(600);
+    expect(parameters.timestampControlBlockMs).toBe(500);
+    expect(parameters.timestampControlMinLatencyMs).toBe(250);
+    expect(parameters.axStringRangeChars).toBe(10000);
+    expect(parameters.seriesStopConsecutive).toBe(3);
+  });
+
+  test("each of the six is read from its own row: a changed value is the value read", () => {
+    const rows: [string, keyof typeof parameters, number][] = [
+      ["nfr-03-end-timeout-ms", "nfr03EndTimeoutMs", 1999],
+      ["frame-period-intervals", "framePeriodIntervals", 599],
+      ["timestamp-control-block-ms", "timestampControlBlockMs", 499],
+      ["timestamp-control-min-latency-ms", "timestampControlMinLatencyMs", 249],
+      ["ax-string-range-chars", "axStringRangeChars", 9999],
+      ["series-stop-consecutive", "seriesStopConsecutive", 4],
+    ];
+    for (const [key, name, value] of rows) {
+      const changed = protocol.replace(
+        new RegExp(`(\\| \`${key}\` \\| )[0-9]+( \\|)`),
+        `$1${value}$2`,
+      );
+      expect(changed).not.toBe(protocol);
+      expect(seriesParameters(changed)[name]).toBe(value);
+    }
   });
 
   test("the preview delay of the protocol is the one the editor ships", () => {
@@ -111,10 +140,11 @@ describe("the seven thresholds of PROTOCOL.md section 3 are classified", () => {
     });
   });
 
-  test("the prose of section 10.1 still fixes the 600 intervals of the frame period", () => {
-    expect(FRAME_PERIOD_INTERVALS).toBe(600);
+  // The prose names the field; the harness reads it, never a constant of its own.
+  test("section 10.1 reads the frame period from the field frame-period-intervals", () => {
+    expect(seriesParameters(protocol).framePeriodIntervals).toBe(600);
     expect(protocol.replace(/\s+/g, " ")).toContain(
-      "600 intervalles entre rappels `requestAnimationFrame` successifs",
+      "`frame-period-intervals` (§ 1) intervalles entre rappels `requestAnimationFrame` successifs",
     );
   });
 

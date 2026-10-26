@@ -21,7 +21,7 @@ import {
   type ReportManifest,
   type SeriesStop,
 } from "./manifest";
-import { FRAME_PERIOD_INTERVALS, type MeasureSpec } from "./protocol";
+import type { MeasureSpec } from "./protocol";
 
 /**
  * The raw output of `spec`: its measure, its note (for a measure made on one
@@ -57,14 +57,15 @@ export function measuredWithOf(
  * The frame period the script reports at the start of a launch of AT-02 or
  * NFR-03 (PROTOCOL.md section 10.1). A report of another count of intervals,
  * or with a missing statistic, is an instrument error: the launch is redone.
+ * `expected` is `frame-period-intervals` of PROTOCOL.md section 1.
  */
-export function framePeriodOf(event: Record<string, unknown>): FramePeriod {
+export function framePeriodOf(event: Record<string, unknown>, expected: number): FramePeriod {
   const { intervals, p50Ms, p95Ms, maxMs } = event;
   const finite = (value: unknown): value is number =>
     typeof value === "number" && Number.isFinite(value) && value >= 0;
-  if (intervals !== FRAME_PERIOD_INTERVALS) {
+  if (intervals !== expected) {
     throw new Error(
-      `the frame period holds ${String(intervals)} intervals, the protocol reads ${FRAME_PERIOD_INTERVALS}`,
+      `the frame period holds ${String(intervals)} intervals, the protocol reads ${expected}`,
     );
   }
   if (!finite(p50Ms) || !finite(p95Ms) || !finite(maxMs)) {

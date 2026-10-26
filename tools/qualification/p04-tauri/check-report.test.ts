@@ -130,9 +130,21 @@ function greenBody(spec: MeasureSpec): Record<string, unknown> {
       return {
         schema: RAW_SCHEMA,
         kind: "accessibility",
-        role: "AXTextArea",
         total: 1000,
         matching: 1000,
+        found: true,
+        visited: 12,
+        chosen: 1,
+        element: {
+          role: "AXGroup",
+          subrole: null,
+          readings: [
+            { reading: 1, length: 1000, matching: 1000 },
+            { reading: 2, length: 1000, matching: 1000 },
+            { reading: 3, length: 0, matching: 0 },
+          ],
+        },
+        focused: null,
       };
   }
 }
@@ -200,13 +212,16 @@ interface Options {
   // Commits PROTOCOL.md once more after the report: the freeze is broken.
   protocolAfterReport?: boolean;
   commitReport?: boolean;
+  // The protocol committed at P, when it differs from the repository's.
+  protocolText?: string;
 }
 
 function repositoryWith(options: Options = {}): string {
   const root = mkdtempSync(join(tmpdir(), "p04-check-report-"));
   scratch.push(root);
   git(root, "init", "-q");
-  write(root, "tools/qualification/p04-tauri/PROTOCOL.md", protocol);
+  const committed = options.protocolText ?? protocol;
+  write(root, "tools/qualification/p04-tauri/PROTOCOL.md", committed);
   mkdirSync(join(root, "toolchains"), { recursive: true });
   copyFileSync(
     join(repositoryRoot, "toolchains", "notebook-resource-classes.json"),
@@ -215,6 +230,7 @@ function repositoryWith(options: Options = {}): string {
   git(root, "add", "-A");
   git(root, "commit", "-q", "-m", "protocol");
   const fixture = greenFixture(git(root, "rev-parse", "HEAD"));
+  fixture.manifest.protocolSha256 = createHash("sha256").update(committed).digest("hex");
   options.edit?.(fixture);
   for (const [path, raw] of fixture.raws)
     write(root, `${REPORT}/${path}`, `${JSON.stringify(raw)}\n`);
@@ -541,6 +557,19 @@ describe("what section 10.1 makes the report record", () => {
       expect(out).toContain("at-02-1-mib: frame period of launch 0");
       expect(code).toBe(2);
     }
+  });
+
+  // The count of intervals is frame-period-intervals of PROTOCOL.md at P, not a
+  // constant of the verifier: under a protocol that says 599, a period of 600 is refused.
+  test("the count of intervals required is the field of the protocol at P", () => {
+    const changed = protocol.replace(
+      "| `frame-period-intervals` | 600 |",
+      "| `frame-period-intervals` | 599 |",
+    );
+    expect(changed).not.toBe(protocol);
+    const { code, out } = run(repositoryWith({ protocolText: changed }));
+    expect(out).toContain("is not 599 intervals");
+    expect(code).toBe(2);
   });
 
   test("an AT-02 entry without the gap observation -> bound is incomplete", () => {

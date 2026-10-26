@@ -32,7 +32,9 @@ import {
   Unavailable,
   untilCompleted,
 } from "./attempts";
-import { exposedProportion, readFocusedText } from "./ax";
+import { ffiSource } from "./ax";
+import { measureAccessibility } from "./ax-read";
+import { checkStartBoundControl } from "./control";
 import { digestDirectory, editorLines, readFiles } from "./corpus";
 import { evaluate, type MemoryLaunch, type RawBody, type RawOutput } from "./evaluate";
 import { instrumentationScript, type Plan, SCRIPT_SHA256 } from "./instrument";
@@ -59,7 +61,6 @@ import {
 } from "./memory";
 import { isTrial, parseOptions } from "./options";
 import {
-  FRAME_PERIOD_INTERVALS,
   type MeasureId,
   type MeasureSpec,
   measureSpecs,
@@ -77,9 +78,6 @@ const REPOSITORY = join(import.meta.dir, "..", "..", "..", "..");
 const REPORT_TIMEOUT_MS = 120_000;
 /** Wait before reading again when the session is locked or the screen off. */
 const REJECTION_PAUSE_MS = 5000;
-/** PROTOCOL.md section 10.2: the page blocks 500 ms; a platform timestamp measures at least 250 ms. */
-const CONTROL_BLOCK_MS = 500;
-const CONTROL_MINIMUM_MS = 250;
 /**
  * NFR-03: the lines of the note the plan carries, far more than the visible area
  * holds; a visible area that holds more is an instrument error, never "shown".
@@ -191,8 +189,8 @@ async function exitedCleanly(shell: Launched): Promise<void> {
   if (code !== 0) throw shellExited(code);
 }
 
-async function framesOf(shell: Launched): Promise<FramePeriod> {
-  return framePeriodOf(await expectEvent(shell, "frames", REPORT_TIMEOUT_MS));
+async function framesOf(shell: Launched, intervals: number): Promise<FramePeriod> {
+  return framePeriodOf(await expectEvent(shell, "frames", REPORT_TIMEOUT_MS), intervals);
 }
 
 function unavailable(error: unknown): RawBody {
@@ -323,8 +321,8 @@ async function keystrokeLatency(
     count,
     pauseMs: context.parameters.at02PauseMs,
     timeoutMs: context.parameters.keystrokeTimeoutMs,
-    controlBlockMs: CONTROL_BLOCK_MS,
-    frameIntervals: FRAME_PERIOD_INTERVALS,
+    controlBlockMs: context.parameters.timestampControlBlockMs,
+    frameIntervals: context.parameters.framePeriodIntervals,
   };
   const unit = `${spec.id} configuration`;
   const made = await untilCompleted(
@@ -333,16 +331,11 @@ async function keystrokeLatency(
       const { vault, dispose } = freshVault(context.parameters);
       try {
         return await launch(context, vault, plan, unit, async (shell) => {
-          const frames = await framesOf(shell);
+          const frames = await framesOf(shell, context.parameters.framePeriodIntervals);
           const ready = await expectEvent(shell, "ready-control", REPORT_TIMEOUT_MS);
           await typeInto(shell, String(ready.character), 0);
           const control = await expectEvent(shell, "control", REPORT_TIMEOUT_MS);
-          if (typeof control.latency !== "number" || control.latency < CONTROL_MINIMUM_MS) {
-            // PROTOCOL.md section 10.2: the series does not start, no other start bound is substituted.
-            throw new Unavailable(
-              `start-bound control failed: ${String(control.latency)} ms for a ${CONTROL_BLOCK_MS} ms block`,
-            );
-          }
+          checkStartBoundControl(control.latency, context.parameters);
           const samples: (number | null)[] = [];
           const gapsMs: (number | null)[] = [];
           for (let k = 0; k < count; k += 1) {
@@ -406,12 +399,12 @@ async function firstOpening(
             path: notePath(LARGE_NOTE_INDEX),
             firstLines: lines.slice(0, OPEN_PLAN_LINES),
             lineCount: lines.length,
-            // Section 10.3: not observed 2 000 ms after the start bound, +oo, as a keystroke (section 5).
-            timeoutMs: context.parameters.keystrokeTimeoutMs,
-            frameIntervals: FRAME_PERIOD_INTERVALS,
+            // Section 10.3: not observed nfr-03-end-timeout-ms after the start bound, +oo.
+            timeoutMs: context.parameters.nfr03EndTimeoutMs,
+            frameIntervals: context.parameters.framePeriodIntervals,
           };
           return await launch(context, vault, plan, unit, async (shell) => {
-            const frames = await framesOf(shell);
+            const frames = await framesOf(shell, context.parameters.framePeriodIntervals);
             const open = await expectEvent(shell, "open", REPORT_TIMEOUT_MS);
             await exitedCleanly(shell);
             if (open.latency === null && open.callbacks === null) {
@@ -538,7 +531,7 @@ async function accessibility(context: Context, interruptions: Interruption[]): P
   if (!context.trusted)
     throw new Unavailable("AXIsProcessTrusted() is false: the accessibility API refuses the read");
   const unit = "accessibility launch";
-  const { read, reference } = await untilCompleted(
+  const measure = await untilCompleted(
     unit,
     async () => {
       const { vault, dispose } = freshVault(context.parameters);
@@ -551,7 +544,12 @@ async function accessibility(context: Context, interruptions: Interruption[]): P
           unit,
           async (shell) => {
             await expectEvent(shell, "ready-ax", REPORT_TIMEOUT_MS);
-            return { read: readFocusedText(shell.pid), reference: text };
+            const source = ffiSource(shell.pid, () => shell.exitCode());
+            try {
+              return measureAccessibility(source, text, context.parameters.axStringRangeChars);
+            } finally {
+              source.dispose();
+            }
           },
         );
       } finally {
@@ -561,15 +559,10 @@ async function accessibility(context: Context, interruptions: Interruption[]): P
     interruptions,
     context.streak,
   );
-  const { total, matching } = exposedProportion(reference, read.text);
   console.log(
-    `series: accessibility ${read.role} via ${read.source}: ${matching}/${total} UTF-16 units`,
+    `series: accessibility: copy found ${measure.found} after ${measure.visited} elements, reading ${String(measure.chosen)}: ${measure.matching}/${measure.total} UTF-16 units`,
   );
-  return {
-    body: { kind: "accessibility", role: read.role, total, matching },
-    framePeriods: [],
-    boundGap: null,
-  };
+  return { body: { kind: "accessibility", ...measure }, framePeriods: [], boundGap: null };
 }
 
 async function measureOne(spec: MeasureSpec, context: Context): Promise<Measured> {
@@ -656,7 +649,7 @@ async function main(argv: readonly string[]): Promise<number> {
     trusted: accessibilityTrusted(),
     cap: (count) => (chosen.trial === null ? count : Math.min(count, chosen.trial)),
     rejected: { "session-locked": 0, "display-asleep": 0, "helpers-unattributed": 0 },
-    streak: new Streak(),
+    streak: new Streak(parameters.seriesStopConsecutive),
   };
   console.log(
     `series: machine ${machine.class}, commit ${commit}, trial ${trial}, accessibility trusted ${context.trusted}`,

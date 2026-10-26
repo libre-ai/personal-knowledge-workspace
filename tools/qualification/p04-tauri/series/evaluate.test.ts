@@ -305,12 +305,73 @@ describe("AT-01 paragraph edit", () => {
 });
 
 describe("accessibility", () => {
+  // The copy found; reading (1) gives the measure, (2) and (3) read less.
+  const readings = (first: number, second = 0, third = 0) => [
+    { reading: 1, length: 40, matching: first },
+    { reading: 2, length: 40, matching: second },
+    { reading: 3, length: 0, matching: third },
+  ];
   const raw = (total: number, matching: number) => ({
     ...of(access),
     kind: "accessibility",
-    role: "AXTextArea",
     total,
     matching,
+    found: true,
+    visited: 7,
+    chosen: 1,
+    element: { role: "AXGroup", subrole: null, readings: readings(matching) },
+    focused: null,
+  });
+
+  // PROTOCOL.md section 10.6: the highest of the three proportions, the first in
+  // order at equality; a copy not found is 0, recorded with the elements walked.
+  test("a measure that is not the highest reading is incomplete", () => {
+    const lower = {
+      ...raw(40, 30),
+      element: { role: "AXGroup", subrole: null, readings: readings(30, 40) },
+    };
+    expect(evaluate(access, lower)).toMatchObject({ ok: false });
+  });
+
+  test("at equality the first reading in order is the one recorded", () => {
+    const tie = {
+      ...raw(40, 40),
+      element: { role: "AXGroup", subrole: null, readings: readings(40, 40) },
+    };
+    expect(evaluate(access, tie)).toMatchObject({ ok: true, verdict: "pass" });
+    expect(evaluate(access, { ...tie, chosen: 2 })).toMatchObject({ ok: false });
+  });
+
+  test("the measure from (3) when (1) and (2) read a prefixed text", () => {
+    const third = {
+      ...raw(40, 40),
+      chosen: 3,
+      element: { role: "AXGroup", subrole: "AXDocument", readings: readings(0, 0, 40) },
+    };
+    expect(evaluate(access, third)).toMatchObject({ ok: true, value: 100, verdict: "pass" });
+  });
+
+  test("a copy not found is a measure of 0, red, never unavailable", () => {
+    const notFound = { ...raw(40, 0), found: false, chosen: null, element: null };
+    expect(evaluate(access, notFound)).toMatchObject({ ok: true, value: 0, verdict: "fail" });
+    expect(evaluate(access, { ...notFound, matching: 5 })).toMatchObject({ ok: false });
+  });
+
+  test("without found, visited, roles or the three readings in order, incomplete", () => {
+    const { found: _found, ...noFound } = raw(40, 40);
+    expect(evaluate(access, noFound)).toMatchObject({ ok: false });
+    const { visited: _visited, ...noVisited } = raw(40, 40);
+    expect(evaluate(access, noVisited)).toMatchObject({ ok: false });
+    expect(
+      evaluate(access, { ...raw(40, 40), element: { role: "AXGroup", readings: readings(40) } }),
+    ).toMatchObject({ ok: false });
+    const swapped = [...readings(40)].reverse();
+    expect(
+      evaluate(access, {
+        ...raw(40, 40),
+        element: { role: "AXGroup", subrole: null, readings: swapped },
+      }),
+    ).toMatchObject({ ok: false });
   });
 
   test("every UTF-16 unit matching passes", () => {
@@ -453,7 +514,6 @@ describe("unavailable and malformed raw outputs", () => {
     const result = evaluate(latency, {
       ...of(latency),
       kind: "accessibility",
-      role: "x",
       total: 1,
       matching: 1,
     });

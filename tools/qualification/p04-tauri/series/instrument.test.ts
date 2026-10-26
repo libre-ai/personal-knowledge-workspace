@@ -408,62 +408,105 @@ describe("the end bound of NFR-03", () => {
 describe("NFR-03: the visible area rendered", () => {
   type State = "shown" | "short-plan" | false | null;
   const { visibleArea } = load<{
-    visibleArea: (root: unknown, firstLines: string[], lineCount: number) => State;
+    visibleArea: (
+      root: unknown,
+      firstLines: string[],
+      lineCount: number,
+      viewport: number,
+    ) => State;
   }>(VISIBLE_AREA_SOURCE, ["visibleArea"], {});
 
+  // A window 100 px high.
+  const WINDOW = 100;
   const box = (top: number, bottom: number) => () => ({ top, bottom });
-  // Lines of `lineHeight` px from the top of a scroller of `height` px.
-  function root(texts: string[], height = 100, lineHeight = 20) {
+  // Lines of `lineHeight` px from the top of the scroller, whose box runs from `top`
+  // to `bottom` in window coordinates. By default it is as tall as the note in the
+  // shell (probe of 2026-10-24: 80 to 761 063 px), far below the window.
+  function root(
+    texts: string[],
+    options: { top?: number; bottom?: number; lineHeight?: number } = {},
+  ) {
+    const top = options.top ?? 0;
+    const lineHeight = options.lineHeight ?? 20;
+    const bottom = options.bottom ?? 761_063;
     const lines = texts.map((textContent, index) => ({
       textContent,
-      getBoundingClientRect: box(index * lineHeight, (index + 1) * lineHeight),
+      getBoundingClientRect: box(top + index * lineHeight, top + (index + 1) * lineHeight),
     }));
     return {
       querySelector: (selector: string) =>
-        selector === ".cm-scroller" ? { getBoundingClientRect: box(0, height) } : null,
+        selector === ".cm-scroller" ? { getBoundingClientRect: box(top, bottom) } : null,
       querySelectorAll: (selector: string) => (selector === ".cm-content .cm-line" ? lines : []),
     };
   }
   const note = ["# large", "", "one", "two", "three", "four", "five"];
 
-  test("lines 1 to k with their text, line k reaching the bottom: shown", () => {
-    expect(visibleArea(root(note), note, note.length)).toBe("shown");
+  // PROTOCOL.md section 10.3 as merged with #48: from max(0, top of the scroller) to
+  // min(window height, bottom of the scroller).
+  // As in the shell, the editor has drawn a few lines of a long note (28 of 34 589 on
+  // the 1 MiB note): the note counts far more lines than are rendered.
+  const LONG = 34_589;
+
+  test("a scroller taller than the window: the area ends at the bottom of the window", () => {
+    // Lines 1 to 5 fill 0 to 100; lines 6 and 7 are drawn below the window.
+    expect(visibleArea(root(note), note, LONG, WINDOW)).toBe("shown");
   });
 
-  test("line k cut by the bottom of the scroller: shown", () => {
-    // Lines of 30 px in 100 px: line 4 spans 90 to 120.
-    expect(visibleArea(root(note, 100, 30), note, note.length)).toBe("shown");
+  test("a scroller that starts lower in the window: the area starts at its top", () => {
+    // From 80: line 1 spans 80 to 100, the bottom of the window.
+    expect(visibleArea(root(note, { top: 80 }), note, LONG, WINDOW)).toBe("shown");
+  });
+
+  test("a scroller that starts above the window: the area starts at 0, lines 1 and 2 are not in it", () => {
+    // From -40: lines 1 and 2 are above the window, line 3 is the first one shown.
+    expect(visibleArea(root(note, { top: -40 }), note, note.length, WINDOW)).toBe(false);
+  });
+
+  test("lines 1 to k with their text, line k cut by the bottom of the area: shown", () => {
+    // Lines of 30 px: line 4 spans 90 to 120.
+    expect(visibleArea(root(note, { lineHeight: 30 }), note, note.length, WINDOW)).toBe("shown");
   });
 
   test("the first lines alone, the area not filled: not yet", () => {
-    expect(visibleArea(root(note.slice(0, 1)), note, note.length)).toBe(false);
-    expect(visibleArea(root(note.slice(0, 3)), note, note.length)).toBe(false);
+    expect(visibleArea(root(note.slice(0, 1)), note, note.length, WINDOW)).toBe(false);
+    expect(visibleArea(root(note.slice(0, 3)), note, note.length, WINDOW)).toBe(false);
   });
 
-  test("a short note, all its lines rendered above the bottom: shown", () => {
+  test("a short note, its scroller ending above the bottom of the window: shown", () => {
     const short = ["# short", "text"];
-    expect(visibleArea(root(short), short, short.length)).toBe("shown");
+    expect(visibleArea(root(short, { bottom: 40 }), short, short.length, WINDOW)).toBe("shown");
   });
 
   test("a line whose text differs from the note: not yet", () => {
     const wrong = [...note];
     wrong[3] = "tw";
-    expect(visibleArea(root(wrong), note, note.length)).toBe(false);
+    expect(visibleArea(root(wrong), note, note.length, WINDOW)).toBe(false);
   });
 
   test("lines that do not start at line 1 of the note: not yet", () => {
-    expect(visibleArea(root(note.slice(1)), note, note.length)).toBe(false);
+    expect(visibleArea(root(note.slice(1)), note, note.length, WINDOW)).toBe(false);
   });
 
   test("more visible lines than the plan carries: an instrument error, never shown", () => {
-    expect(visibleArea(root(note), note.slice(0, 2), note.length)).toBe("short-plan");
+    expect(visibleArea(root(note), note.slice(0, 2), note.length, WINDOW)).toBe("short-plan");
   });
 
   test("no scroller yet: not mounted", () => {
-    expect(visibleArea(null, note, note.length)).toBeNull();
+    expect(visibleArea(null, note, note.length, WINDOW)).toBeNull();
     expect(
-      visibleArea({ querySelector: () => null, querySelectorAll: () => [] }, note, note.length),
+      visibleArea(
+        { querySelector: () => null, querySelectorAll: () => [] },
+        note,
+        note.length,
+        WINDOW,
+      ),
     ).toBeNull();
+  });
+
+  test("the script passes the height of the window", () => {
+    expect(instrumentationScript(plans[3] as Plan)).toContain(
+      "visibleArea(editorRoot(), PLAN.firstLines, PLAN.lineCount, window.innerHeight)",
+    );
   });
 });
 

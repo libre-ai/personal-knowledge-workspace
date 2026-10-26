@@ -1,30 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Libre AI contributors
 // SPDX-License-Identifier: EUPL-1.2
 
-// Accessibility read of PROTOCOL.md section 10.6, through the macOS
-// accessibility API called by bun:ffi (the shell forbids unsafe code, so the
-// reader lives outside it). Every call is AXUIElementCopyAttributeValue or
-// AXUIElementCopyParameterizedAttributeValue; frameworks are loaded only when
-// a read is made.
+// The macOS accessibility calls of PROTOCOL.md section 10.6, by bun:ffi (the
+// shell forbids unsafe code, so the reader lives outside it), as an `AxSource`
+// for `ax-read.ts`, which holds the procedure. Every call is
+// AXUIElementCopyAttributeValue or AXUIElementCopyParameterizedAttributeValue;
+// frameworks are loaded only when a read is made. Nothing here is run by the
+// tests: without the Accessibility permission the calls read nothing.
 
 import { dlopen, FFIType, type Pointer, ptr } from "bun:ffi";
 
-/** UTF-16 units equal at the same position, over the length of the reference (PROTOCOL.md section 8). */
-export function exposedProportion(
-  reference: string,
-  exposed: string,
-): { total: number; matching: number } {
-  let matching = 0;
-  for (let index = 0; index < reference.length; index += 1) {
-    if (reference.charCodeAt(index) === exposed.charCodeAt(index)) matching += 1;
-  }
-  return { total: reference.length, matching };
-}
+import type { AxOutcome, AxSource, AxValue } from "./ax-read";
 
 const K_CF_STRING_ENCODING_UTF8 = 0x08000100;
 const K_CF_NUMBER_SINT64_TYPE = 4;
 const K_AX_VALUE_CF_RANGE_TYPE = 4;
-export const SLICE_UNITS = 10_000;
 
 function openFrameworks() {
   const services = dlopen(
@@ -39,6 +29,7 @@ function openFrameworks() {
         args: [FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
         returns: FFIType.i32,
       },
+      AXUIElementGetTypeID: { args: [], returns: FFIType.u64 },
       AXValueCreate: { args: [FFIType.u32, FFIType.ptr], returns: FFIType.ptr },
     },
   );
@@ -56,6 +47,9 @@ function openFrameworks() {
     CFGetTypeID: { args: [FFIType.ptr], returns: FFIType.u64 },
     CFStringGetTypeID: { args: [], returns: FFIType.u64 },
     CFNumberGetTypeID: { args: [], returns: FFIType.u64 },
+    CFArrayGetTypeID: { args: [], returns: FFIType.u64 },
+    CFArrayGetCount: { args: [FFIType.ptr], returns: FFIType.i64 },
+    CFArrayGetValueAtIndex: { args: [FFIType.ptr, FFIType.i64], returns: FFIType.ptr },
     CFNumberGetValue: { args: [FFIType.ptr, FFIType.i64, FFIType.ptr], returns: FFIType.bool },
     CFRelease: { args: [FFIType.ptr], returns: FFIType.void },
   });
@@ -72,8 +66,6 @@ function cfString(f: Frameworks, text: string): Pointer {
 }
 
 function jsString(f: Frameworks, value: Pointer): string {
-  if (f.cf.CFGetTypeID(value) !== f.cf.CFStringGetTypeID())
-    throw new Error("ax: the value is not a string");
   const length = Number(f.cf.CFStringGetLength(value));
   const size =
     Number(f.cf.CFStringGetMaximumSizeForEncoding(length, K_CF_STRING_ENCODING_UTF8)) + 1;
@@ -87,76 +79,79 @@ function jsString(f: Frameworks, value: Pointer): string {
   return text;
 }
 
-function copy(f: Frameworks, element: Pointer, attribute: string, parameter?: Pointer): Pointer {
-  const name = cfString(f, attribute);
-  const out = new BigUint64Array(1);
-  try {
-    const status =
-      parameter === undefined
-        ? f.ax.AXUIElementCopyAttributeValue(element, name, ptr(out))
-        : f.ax.AXUIElementCopyParameterizedAttributeValue(element, name, parameter, ptr(out));
-    if (status !== 0) throw new Error(`ax: ${attribute} failed with AXError ${status}`);
-  } finally {
-    f.cf.CFRelease(name);
-  }
-  const value = Number(out[0]);
-  if (value === 0) throw new Error(`ax: ${attribute} returned no value`);
-  return value as Pointer;
-}
-
-function integer(f: Frameworks, value: Pointer): number {
-  if (f.cf.CFGetTypeID(value) !== f.cf.CFNumberGetTypeID())
-    throw new Error("ax: the value is not a number");
-  const out = new BigInt64Array(1);
-  if (!f.cf.CFNumberGetValue(value, K_CF_NUMBER_SINT64_TYPE, ptr(out)))
-    throw new Error("ax: number unreadable");
-  return Number(out[0]);
-}
-
-export interface AccessibilityRead {
-  role: string;
-  numberOfCharacters: number;
-  text: string;
-  /** "AXValue", or "AXStringForRange" when AXValue was absent or shorter than AXNumberOfCharacters. */
-  source: "AXValue" | "AXStringForRange";
-}
-
-/** Reads the focused element of the application `pid`. The caller has checked `accessibilityTrusted()`. */
-export function readFocusedText(pid: number): AccessibilityRead {
+/** The accessibility tree of the process `pid`. The caller has checked `accessibilityTrusted()`. */
+export function ffiSource(
+  pid: number,
+  shellExit: () => number | null,
+): AxSource<Pointer> & { dispose(): void } {
   const f = openFrameworks();
   const application = f.ax.AXUIElementCreateApplication(pid);
   if (application === null) throw new Error("ax: AXUIElementCreateApplication returned NULL");
+  // Every value copied stays alive until dispose: elements of an array belong to it.
   const owned: Pointer[] = [application];
-  const keep = (value: Pointer): Pointer => {
-    owned.push(value);
-    return value;
+  const types = {
+    string: f.cf.CFStringGetTypeID(),
+    number: f.cf.CFNumberGetTypeID(),
+    array: f.cf.CFArrayGetTypeID(),
+    element: f.ax.AXUIElementGetTypeID(),
   };
-  try {
-    const focused = keep(copy(f, application, "AXFocusedUIElement"));
-    const role = jsString(f, keep(copy(f, focused, "AXRole")));
-    const numberOfCharacters = integer(f, keep(copy(f, focused, "AXNumberOfCharacters")));
-    let value: string | null = null;
+  const fromCF = (value: Pointer): AxValue<Pointer> => {
+    const type = f.cf.CFGetTypeID(value);
+    if (type === types.string) return { kind: "string", value: jsString(f, value) };
+    if (type === types.number) {
+      const out = new BigInt64Array(1);
+      if (!f.cf.CFNumberGetValue(value, K_CF_NUMBER_SINT64_TYPE, ptr(out)))
+        throw new Error("ax: number unreadable");
+      return { kind: "number", value: Number(out[0]) };
+    }
+    if (type === types.element) return { kind: "element", value };
+    if (type === types.array) {
+      const elements: Pointer[] = [];
+      const count = Number(f.cf.CFArrayGetCount(value));
+      for (let index = 0; index < count; index += 1) {
+        const item = f.cf.CFArrayGetValueAtIndex(value, index);
+        if (item !== null && f.cf.CFGetTypeID(item) === types.element) elements.push(item);
+      }
+      return { kind: "elements", value: elements };
+    }
+    return { kind: "other" };
+  };
+  const call = (
+    element: Pointer,
+    attribute: string,
+    parameter: Pointer | null,
+  ): AxOutcome<AxValue<Pointer>> => {
+    const name = cfString(f, attribute);
+    const out = new BigUint64Array(1);
+    let status: number;
     try {
-      value = jsString(f, keep(copy(f, focused, "AXValue")));
-    } catch {
-      value = null;
+      status =
+        parameter === null
+          ? f.ax.AXUIElementCopyAttributeValue(element, name, ptr(out))
+          : f.ax.AXUIElementCopyParameterizedAttributeValue(element, name, parameter, ptr(out));
+    } finally {
+      f.cf.CFRelease(name);
     }
-    if (value !== null && value.length >= numberOfCharacters) {
-      return { role, numberOfCharacters, text: value, source: "AXValue" };
-    }
-    const slices: string[] = [];
-    for (let location = 0; location < numberOfCharacters; location += SLICE_UNITS) {
-      const range = new BigInt64Array([
-        BigInt(location),
-        BigInt(Math.min(SLICE_UNITS, numberOfCharacters - location)),
-      ]);
+    if (status !== 0) return { ok: false, code: status };
+    const value = Number(out[0]);
+    if (value === 0) return { ok: true, value: { kind: "other" } };
+    owned.push(value as Pointer);
+    return { ok: true, value: fromCF(value as Pointer) };
+  };
+  return {
+    application: () => application,
+    attribute: (element, name) => call(element, name, null),
+    stringForRange: (element, location, length) => {
+      const range = new BigInt64Array([BigInt(location), BigInt(length)]);
       const parameter = f.ax.AXValueCreate(K_AX_VALUE_CF_RANGE_TYPE, ptr(range));
       if (parameter === null) throw new Error("ax: AXValueCreate returned NULL");
-      keep(parameter);
-      slices.push(jsString(f, keep(copy(f, focused, "AXStringForRange", parameter))));
-    }
-    return { role, numberOfCharacters, text: slices.join(""), source: "AXStringForRange" };
-  } finally {
-    for (const value of owned) f.cf.CFRelease(value);
-  }
+      owned.push(parameter);
+      return call(element, "AXStringForRange", parameter);
+    },
+    shellExit,
+    dispose: () => {
+      for (const value of owned) f.cf.CFRelease(value);
+      owned.length = 0;
+    },
+  };
 }
