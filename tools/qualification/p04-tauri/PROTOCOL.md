@@ -47,8 +47,12 @@ Les champs de ce tableau sont lus par `protocol.test.ts` ; la colonne « Champ �
 | `at-01-key-gap-ms` | 20 |
 | `nfr-03-end-timeout-ms` | 2000 |
 | `frame-period-intervals` | 600 |
+| `timestamp-control-block-ms` | 500 |
+| `timestamp-control-min-latency-ms` | 250 |
+| `ax-string-range-chars` | 10000 |
+| `series-stop-consecutive` | 3 |
 
-Les dix dernières lignes sont des paramètres de procédure du § 10, ajoutés avant la première
+Les quatorze dernières lignes sont des paramètres de procédure du § 10, ajoutés avant la première
 mesure ; ce ne sont ni des seuils ni des effectifs.
 
 ## 2. Effectifs
@@ -94,8 +98,8 @@ l'échantillon de rang `ceil(0.95 × N)` (rang compté à partir de 1). Pour 3 0
 
 ## 5. Règles de rejet
 
-- Une frappe dont le rendu n'est pas observé en 2 s (2 000 ms) vaut +oo (infini) : elle reste dans
-  l'échantillon, triée en dernier, et elle n'est pas rejetée.
+- Une frappe dont le rendu n'est pas observé en 2 s (`keystroke-timeout-ms`, § 1) vaut +oo
+  (infini) : elle reste dans l'échantillon, triée en dernier, et elle n'est pas rejetée.
 - Un lancement fait session verrouillée ou écran éteint est rejeté et refait ; le nombre de
   lancements rejetés et leur cause sont consignés dans le rapport, et l'effectif de 60 est
   complété par des lancements valides.
@@ -143,8 +147,9 @@ rapport les reprend.
 - Il ne contient aucune valeur mesurée des critères de la série : aucune mesure de la série n'a été
   faite à ce commit (`docs/prd.md` § 5, colonne « Valeur courante »). Les relevés datés du § 10
   (instants de rendu et cadence des rappels, résolution des horloges, noms des processus, rappels
-  suspendus en fenêtre masquée) sont des sondes de l'instrument, faites hors série, sans frappe
-  système ; aucun n'est un échantillon d'une mesure du § 3.
+  suspendus en fenêtre masquée, boîte du défileur et lignes rendues à l'ouverture) sont des sondes
+  de l'instrument, faites hors série, sans frappe système ; aucun n'est un échantillon d'une mesure
+  du § 3.
 - Il ne qualifie pas la machine de mesure et ne signe rien : la qualification macOS est le paquet
   WP-6.
 - Le choix du paragraphe édité par fichier pour AT-01 est fixé au § 10.5 avant la série et
@@ -207,8 +212,9 @@ borne de fin (nombre, p50, p95, maximum), ce qui distingue cette borne de toute 
 chaque lancement de NFR-03, le nombre de rappels demandés jusqu'à la borne. La période de trame est
 relevée au début de chaque lancement d'AT-02 et de NFR-03, avant toute frappe et avant l'ouverture
 mesurée : `frame-period-intervals` (§ 1) intervalles entre rappels `requestAnimationFrame`
-successifs, dont le nombre, le p50, le p95 et le maximum sont consignés. Pendant les frappes d'AT-02, le script ne demande aucun
-rappel `requestAnimationFrame` en dehors de ceux de la borne de fin : le relevé qui a fondé cette
+successifs, dont le nombre, le p50, le p95 et le maximum sont consignés. Pendant les frappes
+d'AT-02, le script ne demande aucun rappel `requestAnimationFrame` en dehors de ceux de la borne
+de fin : le relevé qui a fondé cette
 définition a été fait page au repos, et une boucle de rappels continue cale le rendu sur les
 trames, de sorte qu'un changement attendrait la trame suivante (inféré, non mesuré). Cette règle ne
 lie que le script : les rappels propres de l'application (mesure de CodeMirror, aperçu) font partie
@@ -248,9 +254,10 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   `KeyboardEvent.timeStamp` du `keydown`. Ce protocole suppose que WebKit le dérive de
   l'horodatage de l'événement de la plateforme, et non de l'instant de sa distribution à la page ;
   cette supposition n'est pas mesurée à ce commit. Le harnais la vérifie avant la série par un
-  contrôle discriminant : la page signale, puis bloque son fil principal 500 ms ; le harnais poste
-  une frappe dès le signal ; la latence mesurée doit être d'au moins 250 ms (un horodatage pris à
-  la distribution donnerait de l'ordre d'une trame). Si ce contrôle échoue, la série ne démarre
+  contrôle discriminant : la page signale, puis bloque son fil principal
+  `timestamp-control-block-ms` (§ 1) ; le harnais poste une frappe dès le signal ; la latence
+  mesurée doit être d'au moins `timestamp-control-min-latency-ms` (§ 1) (un horodatage pris à la
+  distribution donnerait de l'ordre d'une trame). Si ce contrôle échoue, la série ne démarre
   pas, et aucune autre borne de début n'est substituée sans révision de ce protocole avant mesure.
 - **Borne de fin** : l'instant peint (§ 10.1) du premier changement du DOM de l'éditeur postérieur
   au `keydown` qui porte le caractère tapé.
@@ -263,11 +270,11 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
 - **Aperçu actif** : l'extension d'aperçu en direct est montée avec son délai livré,
   `preview-delay-ms` du § 1 (`apps/desktop/src/editor/preview.ts:44`) ; elle recalcule en arrière-plan
   pendant la série. Une frappe est postée `at-02-pause-ms` après l'instant peint de la précédente,
-  ou après son délai de 2 000 ms : l'aperçu, déclenché 120 ms après chaque frappe, recalcule entre
-  deux frappes et peut chevaucher la suivante.
+  ou après son délai `keystroke-timeout-ms` (§ 1) : l'aperçu, déclenché `preview-delay-ms` après
+  chaque frappe, recalcule entre deux frappes et peut chevaucher la suivante.
 - **Verdict d'une frappe** : la différence fin moins début, en millisecondes ; +oo si la borne de
-  fin n'est pas observée en 2 000 ms (§ 5). Une différence négative est une erreur d'instrument :
-  la configuration est interrompue, consignée et refaite.
+  fin n'est pas observée en `keystroke-timeout-ms` (§ 1, § 5). Une différence négative est une
+  erreur d'instrument : la configuration est interrompue, consignée et refaite.
 
 ### 10.3 NFR-03, première ouverture de la note de 1 Mio
 
@@ -282,8 +289,9 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   prend la hauteur de toute la note (aucune hauteur n'est imposée à `.cm-editor` ni à `#editor`,
   `apps/desktop/src/editor/styles.ts`, `apps/desktop/src/style.css`), et c'est la fenêtre qui
   défile ; relevé du 2026-10-24, essai hors série sur la note de 1 Mio : boîte du défileur de 80 à
-  761 063 px, 28 lignes rendues. La zone visible est donc l'intersection de la boîte du défileur
-  avec la fenêtre, de 0 à `window.innerHeight` en coordonnées de `getBoundingClientRect()`. Elle
+  761 063 px, 28 lignes rendues. La zone visible est donc la partie de la boîte du défileur que
+  montre la fenêtre : en coordonnées de `getBoundingClientRect()`, de `max(0, haut du défileur)` à
+  `min(window.innerHeight, bas du défileur)`. Elle
   est rendue quand les éléments de ligne de l'éditeur (`.cm-line`) dont la boîte coupe cette zone
   sont, dans l'ordre, les lignes 1 à `k` de la note (`k` au moins 1), chacun portant le texte de la
   ligne de même rang de la note, et quand le bas de la boîte de la ligne `k` est au bas de la zone
@@ -378,19 +386,25 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   focus. L'élément lu est celui-ci : depuis `AXUIElementCreateApplication(pid)` sur le processus de
   la coquille, puis `AXWindows`, l'arbre est parcouru en profondeur par `AXChildren`, dans l'ordre,
   et l'élément lu est le premier dont `AXDescription` ou `AXTitle` vaut ce nom. Aucun élément de ce
-  nom : la proportion vaut 0 (le texte n'est pas exposé), ce n'est pas une mesure indisponible.
+  nom au terme du parcours : la proportion vaut 0 (le texte n'est pas exposé), ce n'est pas une
+  mesure indisponible ; une erreur de l'API pendant le parcours est une `instrument-error`
+  (§ 10.7). Le rapport consigne, à part de la proportion, si l'élément a été trouvé et le nombre
+  d'éléments parcourus, pour qu'un 0 par élément introuvable se distingue d'un 0 par texte.
   L'élément `AXFocusedUIElement` de l'application est lu aussi, par les mêmes attributs, et
   consigné à côté, sans verdict.
-- **Attributs et appels lus** : `AXRole` et `AXSubrole` (consignés) ; si l'élément porte
-  `AXNumberOfCharacters`, son texte est `AXValue`, ou, si `AXValue` est absent ou plus court que
+- **Attributs et appels lus** : `AXRole` et `AXSubrole` (consignés). Le texte de l'élément est
+  pris par la première des trois lectures qui s'applique, dans cet ordre : (1) l'élément porte
+  `AXNumberOfCharacters` : son texte est `AXValue`, ou, si `AXValue` est absent ou plus court que
   `AXNumberOfCharacters`, la lecture par l'attribut paramétré `AXStringForRange` par tranches de
-  10 000 caractères jusqu'à `AXNumberOfCharacters` ; sinon, son texte est la concaténation, dans
-  l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle `AXStaticText`. Le rapport
-  consigne laquelle des deux lectures a donné le texte. Tous les appels passent par
-  `AXUIElementCopyAttributeValue` et `AXUIElementCopyParameterizedAttributeValue`. Les rôles et
-  attributs que WebKit donne à cette copie ne sont pas mesurés à ce commit (l'autorisation
-  Accessibilité manquait) : la lecture ci-dessus couvre les deux formes possibles, et aucune autre
-  n'est substituée sans révision de ce protocole avant mesure.
+  `ax-string-range-chars` (§ 1) caractères jusqu'à `AXNumberOfCharacters` ; (2) sinon, son
+  `AXValue` est une chaîne non vide : son texte est cette chaîne ; (3) sinon, son texte est la
+  concaténation, dans l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle
+  `AXStaticText`. Le rapport consigne laquelle des trois lectures a donné le texte. Tous les appels
+  passent par `AXUIElementCopyAttributeValue` et `AXUIElementCopyParameterizedAttributeValue`. Les
+  rôles et attributs que WebKit donne à cette copie ne sont pas mesurés à ce commit (l'autorisation
+  Accessibilité manquait) : ces trois lectures sont fixées avant mesure sans que leur couverture
+  des formes de WebKit soit établie ; une forme qu'aucune ne lit donne une proportion basse, jamais
+  un vert, et aucune autre lecture n'est substituée sans révision de ce protocole avant mesure.
 - **Unité de caractère** : l'unité de code UTF-16, celle des chaînes de l'API d'accessibilité. Le
   texte de référence est le fichier décodé en UTF-8 strict, marque d'ordre des octets gardée, en
   unités UTF-16 ; la proportion du § 8 compte les unités égales à la même position.
@@ -429,10 +443,10 @@ pour l'une des causes de cet ensemble fermé :
 - `instrument-error` : une différence négative (§ 10.2), ou une erreur du harnais ou du script
   d'instrumentation lui-même (exception, relevé illisible), consignée avec son message.
 
-Trois rejets ou interruptions consécutifs de même cause arrêtent la série : elle est consignée
-avec cette cause, sans verdict. `shell-exited` y est nommé défaut du produit mesuré, pas de la
-machine. La série ne reprend qu'après correction de la machine, de l'instrument ou du produit, sur
-une copie neuve du corpus. Après une correction de la machine seule (une application fermée, un
+`series-stop-consecutive` (§ 1, trois) rejets ou interruptions consécutifs de même cause arrêtent
+la série : elle est consignée avec cette cause, sans verdict. `shell-exited` y est nommé défaut
+du produit mesuré, pas de la machine. La série ne reprend qu'après correction de la machine, de
+l'instrument ou du produit, sur une copie neuve du corpus. Après une correction de la machine seule (une application fermée, un
 réglage rétabli), le binaire et l'instrument sont les mêmes et la série se poursuit, les
 échantillons déjà valides restant acquis. Un instrument corrigé change la procédure de mesure, et un
 produit corrigé est un autre binaire mesuré, dont l'empreinte est consignée au manifeste : dans
