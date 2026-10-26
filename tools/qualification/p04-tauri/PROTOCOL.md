@@ -392,21 +392,24 @@ caractère peint dans l'éditeur, l'aperçu en direct actif en arrière-plan.
   d'éléments parcourus, pour qu'un 0 par élément introuvable se distingue d'un 0 par texte.
   L'élément `AXFocusedUIElement` de l'application est lu aussi, par les mêmes attributs, et
   consigné à côté, sans verdict.
-- **Attributs et appels lus** : `AXRole` et `AXSubrole` (consignés). Le texte de l'élément est
-  pris ainsi : (1) si l'élément porte `AXNumberOfCharacters`, son texte est `AXValue`, ou, si
+- **Attributs et appels lus** : `AXRole` et `AXSubrole` (consignés). Trois lectures du texte de
+  l'élément sont toujours faites : (1) si l'élément porte `AXNumberOfCharacters`, `AXValue`, ou, si
   `AXValue` est absent ou plus court que `AXNumberOfCharacters`, la lecture par l'attribut
   paramétré `AXStringForRange` par tranches de `ax-string-range-chars` (§ 1) caractères jusqu'à
-  `AXNumberOfCharacters` ; sinon, deux lectures sont faites et consignées, (2) l'`AXValue` de
-  l'élément s'il est une chaîne, et (3) la concaténation, dans l'ordre du même parcours, de
-  l'`AXValue` de ses descendants de rôle `AXStaticText` ; son texte est la plus longue des deux en
-  unités UTF-16, (2) à longueur égale. Le choix ne compare rien au texte de référence : une
-  lecture tronquée par l'une des deux formes ne masque pas le texte entier porté par l'autre. Le
-  rapport consigne laquelle des trois lectures a donné le texte. Tous les appels
-  passent par `AXUIElementCopyAttributeValue` et `AXUIElementCopyParameterizedAttributeValue`. Les
-  rôles et attributs que WebKit donne à cette copie ne sont pas mesurés à ce commit (l'autorisation
-  Accessibilité manquait) : ces trois lectures sont fixées avant mesure sans que leur couverture
-  des formes de WebKit soit établie ; une forme qu'aucune ne lit donne une proportion basse, jamais
-  un vert, et aucune autre lecture n'est substituée sans révision de ce protocole avant mesure.
+  `AXNumberOfCharacters` ; (2) l'`AXValue` de l'élément s'il est une chaîne ; (3) la
+  concaténation, dans l'ordre du même parcours, de l'`AXValue` de ses descendants de rôle
+  `AXStaticText`. Une lecture qui ne s'applique pas (attribut absent, aucun descendant) vaut le
+  texte vide. La proportion du § 8 est calculée pour chacune des trois ; la mesure est la plus
+  haute, le texte que l'API restitue par au moins une des lectures fixées ici, et une lecture
+  tronquée, préfixée ou dans un autre ordre ne masque donc pas une autre qui restitue la note. Le
+  rapport consigne les trois proportions, leurs longueurs en unités UTF-16, et laquelle donne la
+  mesure (la première dans l'ordre (1), (2), (3) à proportion égale). Tous les appels passent par
+  `AXUIElementCopyAttributeValue` et `AXUIElementCopyParameterizedAttributeValue`. Les rôles et
+  attributs que WebKit donne à cette copie ne sont pas mesurés à ce commit (l'autorisation
+  Accessibilité manquait) : ces trois lectures et leur agrégation sont fixées avant mesure sans que
+  leur couverture des formes de WebKit soit établie ; une forme qu'aucune ne lit donne une
+  proportion basse, jamais un vert, et aucune autre lecture ni agrégation n'est substituée sans
+  révision de ce protocole avant mesure.
 - **Unité de caractère** : l'unité de code UTF-16, celle des chaînes de l'API d'accessibilité. Le
   texte de référence est le fichier décodé en UTF-8 strict, marque d'ordre des octets gardée, en
   unités UTF-16 ; la proportion du § 8 compte les unités égales à la même position.
