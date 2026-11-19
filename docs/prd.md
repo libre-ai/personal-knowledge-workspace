@@ -194,11 +194,18 @@ Argumentaire :
 - P04 est le seul produit de ce dépôt avec un PRD et une décision de surface signée (D97) ; le
   jalon B' exige l'usage réel de la boucle documentaire par le propriétaire, et P04 en porte la
   seconde moitié (`ADR-0042:78-80` ; critère CA-31).
-- Les cinq autres produits n'ont ni code ni porteur : un dépôt par produit sans code créerait cinq
-  homes réservés sans critère mesurable ; ils restent des chapitres de cadrage (cahier § 4.1).
+- Les cinq autres produits n'avaient ni code ni porteur : un dépôt par produit sans code créerait
+  des homes réservés sans critère mesurable ; P01, P03, P05 et P07 restent des chapitres de cadrage
+  (cahier § 4.1). P06 est ouvert au code par la décision du propriétaire du 2026-11-19 pour le seul
+  périmètre local, sans modèle de langage, dérivé du Markdown : découpage en passages ancrés et
+  garde d'exclusion d'un corpus, dans le crate `crates/p06-passages` (cahier § 4.1, EF-P06-1 à
+  EF-P06-5 ; paquet WP-9 du § 10). ADR-0042 place P06 « en avance de leur domaine, parce que
+  d'autres produits en dépendent » (`ADR-0042:99-100`).
 - Les chapitres P03, P05 et P06 deviennent des lignes « intégration » (CADRAGE § 1.6) si H-5 et
   AB-5 le confirment ; P01 reste « neuf » ; P07 reste « archive » tant qu'aucun import avec
-  provenance n'est fait (E21 de la mission).
+  provenance n'est fait (E21 de la mission). Pour P06, AB-5 continue de régir le moteur de
+  recherche, hors périmètre ; le périmètre ouvert en est l'adaptateur côté Markdown (cahier R14,
+  proposition de l'agent, à signer).
 
 Alternatives instruites : **scinder** P04 vers un dépôt propre n'a plus d'objet depuis ADR-0054 :
 le seul produit à locataire et RLS (P02) est sorti, et P04 reste local sans tenant (Q10 de la
@@ -236,11 +243,12 @@ ADR-0044. Ces amendements sont faits : ce document ne porte plus de position, il
 
 ## 10. Paquets de travail
 
-Le tableau ci-dessous est limité au jalon ouvert par ADR-0057 pour P04 : protocole de mesure,
-coquille, pont, éditeur, harnais de la série, arbre d'accessibilité, série de mesures, qualification
-macOS. Les critères qu'il cite sont ceux
-du cahier § 8 déclarés `[état : à construire]` pour ce jalon (CA-34 à CA-49) ; les autres critères
-ne sont pas découpés ici. Au 2026-10-23, CA-3 à CA-6, CA-9 à CA-12 et CA-17 sont verts ; CA-1, CA-2,
+Le tableau ci-dessous couvre le jalon ouvert par ADR-0057 pour P04 (protocole de mesure, coquille,
+pont, éditeur, harnais de la série, arbre d'accessibilité, série de mesures, qualification macOS)
+et, depuis la décision du propriétaire du 2026-11-19, le périmètre local de P06 (passages ancrés et
+garde d'exclusion d'un corpus). Les critères qu'il cite sont ceux du cahier § 8 déclarés
+`[état : à construire]` pour ce jalon (CA-34 à CA-49) et pour ce périmètre (CA-50 à CA-53) ; les
+autres critères ne sont pas découpés ici. Au 2026-10-23, CA-3 à CA-6, CA-9 à CA-12 et CA-17 sont verts ; CA-1, CA-2,
 CA-8, CA-14 et CA-32 sont rouges, CA-7 et CA-13 partiels, CA-15, CA-16 et CA-31 à construire, sans
 paquet dans ce jalon (rejouer `grep -n 'état :' docs/cahier-des-charges.md`).
 
@@ -252,7 +260,10 @@ rien mesurer et écrit dans la fiche le plafond de mémoire exigé par CA-46 ava
 paquet WP-8 construit l'arbre d'accessibilité de l'éditeur (EF-P04-11), tous deux avant WP-5
 (décisions du propriétaire du 2026-10-24) ; le paquet WP-5 rejoue la série dans la coquille
 construite et commite le rapport ; le paquet WP-6 qualifie sur macOS et met la fiche à jour, avec
-pour critère de sortie « série du paquet WP-5 verte ».
+pour critère de sortie « série du paquet WP-5 verte ». Le paquet WP-9 ne dépend d'aucun autre
+paquet et aucun n'en dépend ; il se réalise par deux pull requests, d'abord le découpage, qui
+couvre les critères CA-50, CA-51 et CA-52, puis la garde, qui couvre le critère CA-53 et lit les
+passages du découpage.
 
 Périmètres : chaque entrée est un chemin ou un glob borné. Les répertoires `apps/desktop/`,
 `crates/notebook-vault/`, `tools/qualification/p04-tauri/` et le workflow
@@ -262,9 +273,14 @@ fidèles à l'octet, analyse Markdown de l'aperçu, index), distinct de `noteboo
 composant WASM sans import hôte de la réplique chiffrée (EF-P04-2 interdit à `notebook-core` tout
 accès au système de fichiers). Les scripts `check:p04-shell`, `check:p04-bridge` et
 `check:p04-editor` sont ajoutés à `package.json` par les paquets qui les citent ; chacun enchaîne
-les tests Rust et Bun nommés par ses critères.
+les tests Rust et Bun nommés par ses critères. Le répertoire `crates/p06-passages/` n'existe pas
+au SHA de la décision du 2026-11-19 : le paquet WP-9 le crée, ajoute le crate aux `members` et aux
+`default-members` du workspace (pour que `cargo test --locked` de la composition le joue), ajoute
+le script `check:p06-passages` (format, clippy sans avertissement, tests du crate) à
+`package.json`, et ajoute à `project.v1.yaml` l'entrée `products` de P06 dans la pull request qui
+suit le premier fichier de ce répertoire (cahier EF-P06-1).
 
-Portes : les paquets WP-1 à WP-5, WP-7 et WP-8 sont `two-way` (code, tests, corpus et rapport se défont par une
+Portes : les paquets WP-1 à WP-5, WP-7, WP-8 et WP-9 sont `two-way` (code, tests, corpus et rapport se défont par une
 pull request ; aucune dépendance de flotte, aucun acte du propriétaire). Le paquet WP-6 est
 `one-way` : la signature `codesign` engage un certificat Developer ID du compte Apple Developer du
 propriétaire, la notarisation soumet l'empreinte du binaire à Apple et le ticket émis n'est pas
@@ -280,4 +296,5 @@ flotte.
 | `WP-5` | `CA-43`, `CA-44` | `tools/qualification/p04-tauri/reports/**`, `docs/apps/p04-tauri-qualification.md` | `bun tools/qualification/p04-tauri/check-report.ts` | `two-way` |
 | `WP-7` | `CA-48` | `tools/qualification/p04-tauri/series/**`, `tools/qualification/p04-tauri/check-report.ts`, `tools/qualification/p04-tauri/check-report.test.ts`, `apps/desktop/src-tauri/examples/**`, `project.v1.yaml`, `package.json` | `bun test tools/qualification/p04-tauri` | `two-way` |
 | `WP-8` | `CA-49` | `apps/desktop/src/editor/**`, `apps/desktop/e2e/**`, `apps/desktop/tests/editor/**` | `bun run check:p04-editor` | `two-way` |
+| `WP-9` | `CA-50`, `CA-51`, `CA-52`, `CA-53` | `crates/p06-passages/**`, `Cargo.toml`, `Cargo.lock`, `deny.toml`, `package.json`, `project.v1.yaml` | `bun run check:p06-passages` | `two-way` |
 | `WP-6` | `CA-45`, `CA-46` | `.github/workflows/p04-desktop-macos.yml`, `apps/desktop/src-tauri/entitlements.plist`, `project.v1.yaml`, `README.md`, `README.fr.md` | `gh run list -R libre-ai/personal-knowledge-workspace --workflow p04-desktop-macos.yml --limit 1 --json conclusion` | `one-way` |

@@ -11,7 +11,9 @@ P04 est la coquille Tauri 2 et l'éditeur CodeMirror 6 d'ADR-0057 ; treize crit�
 pour le jalon ouvert par ADR-0057. Les critères de la mission conservés gardent leur numéro, soit
 les critères CA-1 à CA-17, CA-31 et CA-32 ; les numéros de la mission qui portaient P02, soit les
 numéros de CA-18 à CA-30 et le numéro CA-33, ne sont pas réutilisés, pour que chaque numéro
-désigne la même chose ici et dans la mission ; les critères ajoutés vont de CA-34 à CA-49.
+désigne la même chose ici et dans la mission ; les critères ajoutés vont de CA-34 à CA-49, puis
+de CA-50 à CA-53 pour le périmètre de P06 ouvert au code par la décision du propriétaire du
+2026-11-19 (§ 4.1).
 Réécritures de forme exigées par la norme des
 paquets de travail de `libre-ai/project-governance` (`docs/specifications/WORK-PACKAGES.md`) :
 chaque paramètre écrit entre chevrons dans la mission est écrit en capitales (`SHA`, `ORG/DEPOT`,
@@ -128,12 +130,18 @@ révision par ADR-0057.
 | P01 — accès aux sources | aucun code | chapitre de cadrage ; ligne de catalogue « neuf » |
 | P03 — entretien du corpus bibliographique | aucun code | chapitre de cadrage ; candidat « intégration » (Zotero AGPL-3.0 par son API seule, `ADR-0042` § 4) |
 | P05 — wiki | aucun code ; capacité `knowledge` absorbée en projection dans l'autorité (ADR-0041 § 4) | chapitre de cadrage ; candidat « intégration » |
-| P06 — recherche transversale | aucun code ; « en avance de son domaine » (`ADR-0042:99-100`) | chapitre de cadrage ; dépendance de P04 (index plein texte, porté par `notebook-vault`) |
+| P06 — recherche transversale | aucun code au SHA ; « en avance de son domaine » (`ADR-0042:99-100`) ; cible : crate `crates/p06-passages` (paquet `libre-ai-p06-passages`), créé par le paquet WP-9 | ouvert au code pour le seul périmètre local, sans modèle de langage, dérivé du Markdown : découpage en passages ancrés et garde d'exclusion d'un corpus ; exigences EF-P06-1 à EF-P06-5, critères CA-50 à CA-53 (§ 8) ; l'index plein texte de P04 reste porté par `notebook-vault` |
 | P07 — apprentissage et révision | aucun code ; ancien porteur archivé (`ai-practice-workbench`) | chapitre de cadrage ; catalogue `archive` |
 
-Les chapitres P01, P03, P05, P06 et P07 ne portent aucun critère d'acceptation : un critère sans
-code à mesurer serait une assertion sur rien. Les critères de P04 qui portent sur du code
-inexistant au SHA le déclarent par leur préfixe `[état : à construire]` (§ 8). Le code P02 ne porte
+Les chapitres P01, P03, P05 et P07 ne portent aucun critère d'acceptation : un critère sans code à
+mesurer serait une assertion sur rien. P06 en porte depuis la décision du propriétaire du
+2026-11-19, prise en réponse à une question structurée hors de ce dépôt (« Ouvrir P06 ») : ses
+critères portent sur le seul périmètre de la ligne P06 ci-dessus, déclarés `[état : à construire]`.
+Proposition de l'agent, à signer : cette décision lève, pour ce périmètre seul, le gel des
+produits autres que P04 (décision du propriétaire du 2026-11-18, rappelée par
+`docs/cadrage-adaptateur-source-git.md` § 1) ; son inscription au registre des décisions de
+`libre-ai/project-governance` n'est pas faite par ce document. Les critères de P04 qui portent sur
+du code inexistant au SHA le déclarent par leur préfixe `[état : à construire]` (§ 8). Le code P02 ne porte
 aucun critère : ses tests restent dans l'arbre et dans `bun run check` tant qu'il n'est pas retiré,
 mais aucun critère de ce cahier ne les cite.
 
@@ -146,6 +154,14 @@ mais aucun critère de ce cahier ne les cite.
 - Traitement par un modèle de langage en v1 (P33 non qualifié ; PRD 11 F41 à F44) : aucune
   exigence AI Act n'est retenue en v1 (hypothèse, champ d'application AI Act art. 2 non relu
   `[NON VÉRIFIÉ]`).
+- P06 au-delà du périmètre local ouvert par le § 4.1 : recherche vectorielle ou sémantique,
+  plongements, stockage PostgreSQL des passages, filtrage par organisation, par rôle ou par droits,
+  multi-organisation, réponse générée à partir des passages, connecteurs vers d'autres applications
+  (messagerie, agenda, fichiers distants), classement et requête des passages, commande du pont
+  Tauri exposant les passages au front. Ces capacités de la fiche du catalogue
+  (`ecosystem/produits/P06.v1.yaml` de l'autorité) restent hors de ce cahier ; chacune exige une
+  décision du propriétaire, des exigences et des critères propres. Le traitement par un modèle de
+  langage reste hors v1 (point précédent).
 - Veille, flux, règles, OPML : P02, dépôt `information-watch` (`ADR-0054:35-41`).
 - Distribution signée à un tiers : exigence de distribution, pas d'usage propre
   (`ADR-0042:226-229`) ; la qualification macOS (CA-45) prépare la signature sans distribuer.
@@ -250,11 +266,101 @@ Chapitres sans code (exigences de cadrage, pas de critère) :
   (catalogue P03 ; `ADR-0042` § 4).
 - EF-P05-1 Aucun wiki n'est écrit avant une décision « intégration ou écriture » (CADRAGE § 1.6 ;
   question Q7 de la mission).
-- EF-P06-1 L'index transversal est une capacité consommée par P04 ; sa place (crate
-  `notebook-vault`, cœur Tantivy MIT) est déclarée dans la fiche avant tout code d'index
-  transversal hors P04.
 - EF-P07-1 Toute réutilisation de l'archive `ai-practice-workbench` passe par un import avec
   provenance (`ADR-0042:183-191`, acte 3).
+
+P06, périmètre local ouvert le 2026-11-19 (§ 4.1 ; critères CA-50 à CA-53, paquet WP-9). Les choix
+marqués « proposition de l'agent, à signer » ne dérivent d'aucun texte existant ; les autres
+reprennent une exigence de ce cahier ou la source citée. « La source d'origine » désigne les fiches
+d'idées dont sont tirés les lots L048 (découpage) et L050 (garde) du plan de réécriture du
+2026-11-16, hors de ce dépôt ; leurs critères ambigus (une ligne de 2 500 caractères sous une borne
+de 1 000 donnant trois passages préfixés, contre des passages faits de lignes entières ; un
+document de 60 caractères sans passage, sans seuil donné) sont tranchés par EF-P06-4 (d) et (e).
+
+- EF-P06-1 L'index transversal est une capacité consommée par P04 ; sa place est déclarée dans la
+  fiche avant tout code d'index transversal hors P04. Place déclarée : l'index plein texte de P04
+  reste dans `crates/notebook-vault` (`Vault::rebuild_index`, `Vault::search`), index inversé en
+  mémoire écrit dans ce dépôt, sans Tantivy (`grep -c 'name = "tantivy"' Cargo.lock` → 0 le
+  2026-11-19 ; la version précédente de cette exigence nommait « cœur Tantivy MIT », un candidat,
+  voir R9) ; le code de P06 hors P04 vit dans le crate `crates/p06-passages`, paquet
+  `libre-ai-p06-passages` (nom : proposition de l'agent, à signer), déclaré dans `project.v1.yaml`
+  par la phase `p06-passages`, version de P06. L'entrée `products` de P06 est ajoutée à la fiche
+  par la première pull request du paquet WP-9 qui suit un fichier sous ce chemin : le gate de flotte
+  des versions de l'autorité (`ecosystem/check-fleet-versions.ts`) refuse un chemin que la branche
+  servie ne suit pas, et la liste publique des produits avec code en est la projection
+  (`distribution/build-products-with-code.ts`). Ce changement satisfait l'exigence.
+- EF-P06-2 Les passages MUST être dérivés du seul dossier Markdown (EF-P04-4) : reconstruits
+  identiques à partir des mêmes octets et des mêmes paramètres, tenus en mémoire, jamais écrits dans
+  le dossier ni ailleurs (aucune persistance en v1 : proposition de l'agent, à signer). Le crate
+  MUST NOT ouvrir de connexion réseau, lancer de processus ni appeler de modèle de langage (§ 4.2) ;
+  ses dépendances forment une liste fermée (CA-52). Les notes sont énumérées selon les règles de
+  l'index de `notebook-vault` : fichiers `.md`, entrées cachées et liens symboliques ignorés et
+  comptés, note de plus de 16 Mio (`MAX_NOTE_BYTES`) comptée illisible. Une note dont les octets ne
+  sont pas de l'UTF-8 valide est comptée illisible et ne donne aucun passage ; aucun décodage avec
+  perte (proposition de l'agent, à signer).
+- EF-P06-3 Vue texte et titre. Les lignes d'une note sont séparées par LF seul, la règle de
+  l'éditeur de P04 (`EditorState.lineSeparator.of("\n")`,
+  `apps/desktop/src/editor/typed-text.ts:61`), qui est aussi celle de `git show` et de `grep -n` :
+  l'ancre `chemin:ligne` ouvre ainsi la même ligne dans l'éditeur. Un CR seul reste un caractère de
+  la ligne ; un CR placé juste avant LF est retiré du texte de la ligne (règle de la source
+  d'origine ; proposition de l'agent, à signer). Les lignes sont numérotées à partir de 1, un LF
+  final n'ouvre pas de ligne, un texte vide n'a aucune ligne. La vue texte `plain` garde une ligne
+  par ligne de la note, dans le même ordre : un frontmatter terminé (première ligne exactement
+  `---`, puis une ligne exactement `---`) y devient autant de lignes vides, pour que les numéros
+  ne bougent pas ; un frontmatter non terminé laisse le contenu intact ; rien d'autre n'est retiré (proposition de l'agent, à signer : le retrait du
+  balisage, des citations et des tableaux de la source d'origine change le nombre de lignes et
+  servait le plongement, hors périmètre). Le titre `title` est le premier titre de niveau 1 au sens
+  de CommonMark (ATX ou Setext) du corps, hors frontmatter et hors bloc de code ; sans lui, le titre
+  est absent ; un titre de niveau 2 ou plus n'est jamais le titre.
+- EF-P06-4 Découpage `chunk(vue, max, recouvrement, min)`. Un passage porte le chemin de la note
+  relatif à la racine (séparateur `/`), la révision de la note (SHA-256 de ses octets en 64 chiffres
+  hexadécimaux minuscules, l'algorithme de `Revision::of` de `notebook-vault`), son index, sa
+  première et sa dernière ligne, et son contenu ; son ancre est `chemin:ligne` de sa première ligne.
+  Règles :
+  (a) une ligne émise est son préfixe (le chemin, deux-points, le numéro de ligne en décimal, une
+  barre verticale U+007C et une espace, la forme de la source d'origine) suivi de son texte ; une
+  ligne vide ou faite seulement d'espaces et de tabulations n'est pas émise ;
+  (b) le contenu est la suite des lignes émises jointes par LF ; sa longueur se compte en valeurs
+  scalaires Unicode, préfixes et LF compris (proposition de l'agent, à signer) ; aucun passage ne
+  dépasse `max` ;
+  (c) un passage est fait de lignes entières, dans l'ordre, rempli tant que la ligne suivante tient ;
+  chaque passage après le premier commence par la plus longue suite de dernières lignes du passage
+  précédent dont la longueur, LF compris, est au plus le minimum de `recouvrement` et de la moitié
+  entière de `max`, sans jamais reprendre toutes ses lignes : chaque passage apporte au moins une
+  ligne nouvelle ;
+  (d) seule une ligne dont la forme émise dépasse `max` est coupée : elle forme seule des passages
+  consécutifs, coupés entre deux valeurs scalaires, chacun fait du préfixe de la ligne et d'au plus
+  `max` valeurs scalaires préfixe compris ; ni recouvrement entre ses pièces ni avec les passages
+  voisins ; la concaténation des pièces sans leur préfixe est exactement le texte de la ligne ; si
+  le préfixe dépasse la moitié entière de `max`, les pièces n'en portent pas (règle de la source
+  d'origine) ; l'ancre de chaque pièce est la ligne coupée (première et dernière ligne égales) ;
+  (e) le seuil minimal `min` est une donnée : un paramètre du découpage, dont la valeur par défaut,
+  80 valeurs scalaires, est une constante publique du crate (valeur de la source d'origine ;
+  proposition de l'agent, à signer). Une note dont les textes des lignes émises, préfixes exclus,
+  totalisent au plus `min` valeurs scalaires ne donne aucun passage (la source écartait les
+  fragments de 80 caractères ou moins) ; toute autre note donne des
+  passages qui couvrent chacune de ses lignes émises, et aucun passage n'est écarté seul, pour que
+  la couverture tienne (proposition de l'agent, à signer : la source écartait chaque passage court) ;
+  (f) les index sont consécutifs à partir de 0 dans chaque note ;
+  (g) `max` nul est refusé ; tout refus est un code fermé `p06.*` qui ne porte ni chemin ni contenu
+  (ENF-1).
+- EF-P06-5 Garde d'exclusion `guard(racine, manifeste, références)`. Le manifeste est un fichier
+  texte, un chemin relatif à la racine par ligne, lignes vides et lignes commençant par `#`
+  ignorées ; une note est exclue quand son chemin est égal à une entrée ou situé sous elle, et le
+  découpage n'en lit pas les octets. Une référence est un fichier TSV dont la ligne d'en-tête nomme
+  les colonnes : `sha256` (obligatoire, 64 chiffres hexadécimaux minuscules) et `source` (facultative,
+  chemin relatif à la racine), trouvées par leur nom. La garde énumère tous les passages produits
+  pour la racine avec ce manifeste et échoue si l'un est touché par chemin (sa note est égale à une
+  entrée du manifeste ou sous elle, ou égale à une `source` d'une référence) ou par empreinte (sa
+  révision est un `sha256` d'une référence). Elle imprime ses compteurs sur une ligne, puis `pass`
+  ou `fail` : notes examinées = indexées + exclues, illisibles à part, passages, lignes de
+  référence, touches par chemin, touches par empreinte. Codes : 0 `pass` ; 1 au moins une touche ou
+  au moins une note illisible, même sans touche ; 3 racine, manifeste ou référence illisible, mal
+  formé ou vide (aucune ligne de référence), jamais un `pass`. Aucune valeur d'une référence
+  (`sha256`, `source`), aucun chemin ni contenu de note n'est imprimé : une touche est donnée par son
+  type et le rang du passage dans l'énumération, une référence mal formée par son rang, sa ligne et
+  sa colonne. Repris du lot de la source d'origine sans sa base de données : ni transaction, ni
+  rôle sous sécurité par ligne, ni pièces jointes (hors périmètre, § 4.2).
 
 ### 5.2 Exigences non fonctionnelles
 
@@ -319,6 +425,7 @@ Chapitres sans code (exigences de cadrage, pas de critère) :
 | Front de la coquille (cible) | processus Rust → WKWebView | front servi depuis la mémoire par un schéma privé ; CSP `default-src 'none'` élargie aux origines du schéma ; magasin non persistant | EF-P04-8 ; CA-37 |
 | Extrait P02 → P04 (cible) | fichier → P04 | `knowledge-excerpt.v1` (extrait, ancrage, URL, dates, `source_id`, `item_id`, version) — contrat à créer dans l'autorité ; émis par `information-watch`, importé ici par action explicite | EF-D-3 |
 | Native messaging (cible) | extension ↔ hôte | messages `{data, meta}` validés par schéma, ≤ 64 Kio, liste fermée de commandes, manifestes `allowed_origins` et `allowed_extensions` | PRD 11 F45 ; EF-P04-7 |
+| Passages de P06 (cible) | dossier → crate `p06-passages` (bibliothèque Rust, en processus) | `plain`, `title`, `chunk` : passages `{chemin, révision, index, première ligne, dernière ligne, contenu}`, ancre `chemin:ligne` ; `guard` : une ligne de compteurs, puis `pass` ou `fail`, codes 0, 1, 3 ; refus fermés `p06.*` ; aucune commande du pont Tauri | EF-P06-2 à EF-P06-5 ; CA-50 à CA-53 |
 | Protocole et rapport de mesure (cible) | harnais → dépôt | `tools/qualification/p04-tauri/PROTOCOL.md` (effectifs, seuils, statistiques, règles de rejet, machine, SHA-256 du corpus) ; `reports/ID/` (sorties brutes, manifeste JSON liant commit, machine, SHA-256 du corpus, verdict par seuil) | EF-P04-12 ; CA-36, CA-43 |
 
 ## 7. Contraintes de sécurité
@@ -356,7 +463,8 @@ statique ; `[état : à construire]` = code, corpus ou instrument absent du SHA 
 = une partie du critère est à construire. Décompte :
 `grep -cE '^- CA-[0-9]+ \[état : à construire\]' docs/cahier-des-charges.md`, et de même pour
 `rouge`, `vert`, `partiel`. Les critères CA-34 à CA-49 sont ceux du jalon ouvert par ADR-0057 et
-sont découpés en paquets de travail dans `prd.md` § 10.
+sont découpés en paquets de travail dans `prd.md` § 10 ; les critères CA-50 à CA-53 portent le
+périmètre de P06 ouvert le 2026-11-19 et forment le paquet WP-9 du même tableau.
 
 Transverses au dépôt :
 
@@ -623,6 +731,62 @@ du propriétaire du 2026-10-24, avant la série du paquet WP-5) :
   vu rouge. La mesure par l'API d'accessibilité macOS dans la coquille construite reste celle de CA-44
   (paquet WP-5).
 
+P06, périmètre local ouvert le 2026-11-19 — passages ancrés et garde d'exclusion (paquet WP-9).
+Les valeurs des vecteurs ci-dessous sont celles des critères de la source d'origine quand elle en
+donne, et des propositions de l'agent, à signer, pour les autres :
+
+- CA-50 [état : à construire] **Vue texte et titre** (EF-P06-3). Le texte `a` CR LF `b` CR `c` LF
+  donne deux lignes : `a`, puis `b` CR `c` ; le texte vide n'en donne aucune ; `x` LF en donne
+  une. Une note faite de `---`, `title: t`, `---`, `corps` donne une vue de quatre lignes, les trois
+  premières vides et la quatrième `corps` ; la même sans le second `---` donne une vue identique à
+  ses lignes.
+  Le titre de `# Titre` est `Titre` ; celui de `Titre` suivi de `===` est `Titre` ; une note dont le
+  seul titre est `## Sous-titre`, une note dont le `# Titre` est dans un bloc de code délimité, une
+  note dont la ligne est `texte # pas un titre` et une note dont le `# Titre` est dans le frontmatter
+  n'ont pas de titre. Validation : `cargo test --locked -p libre-ai-p06-passages plain` (chaque
+  vecteur ci-dessus ; vecteur rouge : une vue qui laisse le frontmatter terminé vue rouge, une vue
+  qui retire une ligne vue rouge).
+- CA-51 [état : à construire] **Découpage en passages ancrés** (EF-P06-4), sur une note `doc.md`.
+  Cent vingt lignes non vides de 40 caractères, `max` 1 000, `recouvrement` 200, `min` 80 : chaque
+  ligne figure dans au moins un passage sous son préfixe et son numéro, aucun passage ne dépasse
+  1 000 valeurs scalaires, chaque passage après le premier partage au moins une ligne avec le
+  précédent et apporte au moins une ligne absente de lui, les index vont de 0 à n - 1. Une ligne de
+  2 500 caractères, `max` 1 000 : exactement 3 passages, chacun commençant par le préfixe de
+  `doc.md` ligne 1, aucun au-delà de 1 000, première et dernière ligne égales à 1, et la
+  concaténation des trois contenus sans leur préfixe est la ligne exacte, 2 500 caractères. La même
+  ligne avec `max` 12 : des pièces sans préfixe, aucune au-delà de 12, dont la concaténation est la
+  ligne. Avec `min` 80, une note de 60 caractères de texte ne donne aucun passage, une note de 80
+  non plus, et une note de 81 en donne un. Deux lignes vides puis une ligne non vide : la ligne non
+  vide porte le numéro 3 et les lignes vides ne figurent dans aucun passage. Deux découpages des mêmes octets et paramètres
+  sont identiques ; `max` nul est refusé par un code `p06.*`. Validation :
+  `cargo test --locked -p libre-ai-p06-passages chunk` (chaque vecteur ; vecteurs rouges vus rouges,
+  chacun par substitution d'une version fautive : préfixe supprimé, borne `max` ignorée,
+  recouvrement qui reprend toutes les lignes du passage précédent, seuil `min` ignoré).
+- CA-52 [état : à construire] **Dérivé du dossier, local** (EF-P06-2). Sur un dossier temporaire
+  portant les pièges d'octets du critère CA-34 (CRLF, CR seul, BOM, NFD et NFC, caractère hors BMP,
+  fin de fichier sans saut de ligne), un répertoire caché, un lien symbolique, un fichier non `.md`,
+  une note de plus de 16 Mio et une note qui n'est pas de l'UTF-8 valide : les compteurs notes +
+  ignorées + illisibles égalent les entrées qui ne sont pas des répertoires ; deux constructions
+  donnent les mêmes passages ; le SHA-256 de chaque fichier du dossier est le même avant et après.
+  Les dépendances de `crates/p06-passages/Cargo.toml` appartiennent à la liste fermée écrite dans
+  `crates/p06-passages/README.md`, qui ne contient ni client réseau, ni environnement d'exécution
+  asynchrone, ni bibliothèque d'appel à un modèle. Validation :
+  `cargo test --locked -p libre-ai-p06-passages derive` (vecteur rouge : une dépendance hors liste
+  ajoutée vue rouge) et `cargo clippy --locked -p libre-ai-p06-passages --all-targets -- -D warnings`
+  sort 0, le crate héritant des lints du workspace (ENF-3).
+- CA-53 [état : à construire] **Garde d'exclusion d'un corpus** (EF-P06-5). Une note nommée
+  `innocent.md`, hors du manifeste, dont l'empreinte est dans la référence : touche par empreinte
+  seule, code 1. Une note `exclu/a.md` sous l'entrée `exclu` du manifeste, d'empreinte inconnue,
+  dans des passages construits sans le manifeste : touche par chemin seule, code 1. Une référence
+  réduite à son en-tête : code 3, jamais 0 ; une cellule `sha256` mal formée : code 3, message
+  donnant le rang de la référence, la ligne et la colonne, sans la cellule. Une note illisible sans
+  touche : code 1. Un dossier propre : la ligne de compteurs, dont examinées = indexées + exclues,
+  puis `pass`, code 0. Dans la sortie de chacun de ces cas, chaque `sha256` et chaque `source` des
+  références et chaque chemin de note se trouvent 0 fois. Validation :
+  `cargo test --locked -p libre-ai-p06-passages guard` (chaque cas ; vecteur rouge : une garde dont
+  la comparaison d'empreinte est remplacée par une comparaison toujours fausse, vue rouge sur le
+  premier cas).
+
 ## 9. Critères d'abandon
 
 - AB-2 Si le propriétaire retire le besoin d'un P-xx du domaine (seule cause d'abandon admise,
@@ -729,12 +893,16 @@ Apache-2.0, dernière release `tauri-cli-v2.12.4` du 2026-10-21, `ADR-0057:27`),
 | R11 | `LICENSE` niant le code dans un dépôt public | lecteur externe induit en erreur (I-15) | Q4 de la mission ; CA-2 |
 | R12 | Signature et notarisation (CA-45) exigent un compte Apple Developer, acte du propriétaire (`ADR-0042:226-229`) | WP-6 bloqué sans cet acte ; porte `one-way` | la qualification locale (CA-37 à CA-44) ne l'attend pas ; l'usage réel par le propriétaire n'en dépend pas |
 | R13 | Spike `@wdio/tauri-service` fait pour P02 : son verdict vaut pour la flotte (`ADR-0057:73`) ; s'il est rouge, le parcours e2e de CA-41 doit passer par Playwright webkit contre le front seul | parcours fonctionnel mesuré hors coquille | CA-41 écrit sous Playwright webkit (D93) ; le verdict du spike est lu avant WP-4 |
+| R14 | Code de P06 écrit avant la matrice de parité d'AB-5, alors que la fiche du catalogue donne à P06 `realisation: intégration` (`ecosystem/produits/P06.v1.yaml` de l'autorité) | code rendu inutile si un commun couvre le besoin | proposition de l'agent, à signer : AB-5 continue de régir le moteur de recherche de P06 (requête, classement), qui reste hors périmètre (§ 4.2) ; le périmètre ouvert (passages ancrés, garde) est l'adaptateur côté Markdown qu'un moteur intégré consommerait, au sens où EF-P01-1 fait des connecteurs des adaptateurs ; la matrice de parité de P06 reste à exécuter avant tout code de moteur |
 
 ## 12. Table de conformité à SPECIFICATION-STANDARD
 
 Référence : `docs/specifications/SPECIFICATION-STANDARD.md` de l'autorité (13 sections
 obligatoires). Colonne P04 : fichier et section où la section est traitée. Colonne P01, P03, P05,
-P06, P07 : « absente : aucun code au SHA », sauf mention.
+P06, P07 : « absente : aucun code au SHA », sauf mention. Pour le seul périmètre de P06 ouvert le
+2026-11-19, les sections 3 (§ 4.2), 4 et 5 (EF-P06-4, EF-P06-5, refus `p06.*`), 6 (EF-P06-2), 8
+(§ 6, ligne « Passages de P06 »), 10 (§ 6), 11 (CA-50 à CA-53) et 12 (`prd.md` § 10, paquet WP-9)
+sont traitées ; les autres restent absentes pour P06.
 
 | # | Section du standard | P04 | P01, P03, P05, P06, P07 |
 | --- | --- | --- | --- |
