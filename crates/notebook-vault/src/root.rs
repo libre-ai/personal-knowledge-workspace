@@ -241,7 +241,7 @@ mod tests {
         ));
         assert!(under(Path::new("/PRIVATE/Etc"), Path::new("/private/etc")));
         assert!(!under(Path::new("/privateer"), Path::new("/private")));
-        assert!(!under(Path::new("/home/me/etc"), Path::new("/etc")));
+        assert!(!under(Path::new("/home/me/etc"), Path::new("/etc"))); // allow-local-path (fixture)
         assert!(!under(Path::new("/"), Path::new("/etc")));
     }
 
@@ -264,7 +264,7 @@ mod tests {
             Err(RootRefusal::OutsideHome)
         );
         assert_eq!(
-            policy.check_canonical(Path::new("/home/someone-else")),
+            policy.check_canonical(Path::new("/home/someone-else")), // allow-local-path (fixture)
             Err(RootRefusal::OutsideHome)
         );
         assert_eq!(
