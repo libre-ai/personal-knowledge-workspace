@@ -44,6 +44,16 @@ phases:
         text: "Demonstrate a complete capture, edit, retrieval and controlled-export journey using synthetic notes. Verify backup and restoration, incorrect credentials, damaged input and interrupted operations against the actual cryptographic components. Measure browser behavior and resource limits on the exact supported runtimes. Test storage, deletion and network behavior before claiming locality, confidentiality or recoverability."
         weight: 1
         status: "pending"
+  - id: "p06-passages"
+    title: "Anchored passages and excluded-corpus guard"
+    product: "P06"
+    delivers: "A person can derive passages from their local Markdown notes, each pointing back to its file and line, and check that no note of an excluded corpus is among them."
+    note: "Opened to code by the owner's decision of 2026-11-19, for the local scope only: no language model, derived from the Markdown folder (docs/cahier-des-charges.md section 4.1, EF-P06-1 to EF-P06-5). Code place: crates/p06-passages, package libre-ai-p06-passages, created by work package WP-9 of docs/prd.md; the products entry for P06 is added by the first pull request that tracks a file under that path. The full-text index of P04 stays in crates/notebook-vault."
+    exit_criteria:
+      - id: "passages-and-guard"
+        text: "CA-50 to CA-53 of docs/cahier-des-charges.md pass: line-preserving text view and title; whole-line passages bounded by max with overlap, a line longer than max cut into prefixed pieces, a minimum length given as a parameter; passages rebuilt identically from the folder alone, which stays byte-identical; the guard prints its counters, fails on a path or fingerprint hit and on an empty reference, and prints no reference value."
+        weight: 1
+        status: "pending"
 hypothesis: "The intended uses described in README.md can support a useful bounded product once their activation criteria are independently qualified."
 evidence_required:
   - "Demonstrate a complete capture, edit, retrieval and controlled-export journey using synthetic notes. Verify backup and restoration, incorrect credentials, damaged input and interrupted operations against the actual cryptographic components. Measure browser behavior and resource limits on the exact supported runtimes. Test storage, deletion and network behavior before claiming locality, confidentiality or recoverability."
