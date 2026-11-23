@@ -351,7 +351,6 @@ const inputPaths = [
   "third_party/rustcrypto-aes-0.8.4",
   "tools/qualification/notebook-core-v2",
   "toolchains/notebook-qualification.json",
-  "apps/notebook/scripts/build.ts",
   "scripts/machine-paths.ts",
 ];
 const inputFiles = (await Promise.all(inputPaths.map(sourceDigests))).flat();
