@@ -183,10 +183,12 @@ Les lignes P02 du PRD de mission (Miniflux, yarr, RSS, Atom, OPML) sont portées
 **Conserver**, avec le périmètre suivant : le dépôt du domaine Connaissance porte P01 et P03 à P07
 au titre d'`ADR-0042:162-199` (§ 7) tel qu'amendé par `ADR-0054:35-41` (§ 2) ; P04 est le produit en
 réalisation ; P02 est porté par `libre-ai/information-watch` et le code P02 de ce dépôt
-(`crates/p02-domain`, `crates/p02-fetch`, `crates/p02-store`, `crates/p02-worker`, `apps/p02-api`,
+(`crates/p02-domain`, `crates/p02-fetch`, `crates/p02-store`, `crates/p02-worker`,
 `vendored/contracts/p02-job-v1`) devient une référence : il n'est plus un produit de ce dépôt, aucun
 critère d'acceptation ne le mesure ici, et sa reprise par `information-watch` passe par un import
-avec provenance (`ADR-0042:183-191`, acte 3). Son retrait de l'arbre n'est pas décidé par ce
+avec provenance (`ADR-0042:183-191`, acte 3). Le serveur Bun de cette référence, `apps/p02-api`, a été
+retiré de l'arbre le 2026-11-23, décision du propriétaire en chat ; il reste lisible dans l'historique
+git de la branche servie. Le retrait des crates et du contrat vendorisé n'est pas décidé par ce
 document.
 
 Argumentaire :

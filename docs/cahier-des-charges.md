@@ -124,7 +124,7 @@ révision par ADR-0057.
 | Chapitre | Contenu au SHA | Statut de spec |
 | --- | --- | --- |
 | **P04 — notes et mémoire personnelle** | `crates/notebook-core` (scellement et ouverture, canonicalisation Context v2, bornes), `apps/notebook` (host Gate B sous feature gate), harnais de qualification ; cible : coquille Tauri 2 `apps/desktop`, cœur du dossier `crates/notebook-vault`, harnais `tools/qualification/p04-tauri` | exigences, critères d'acceptation : § 5, § 8 |
-| P02 — veille documentaire | `crates/p02-*`, `apps/p02-api`, contrat `p02-job-v1`, migrations `0001`, `0002` : **référence**, pas un produit de ce dépôt (`ADR-0054:39`) | aucune exigence ni critère ici ; spec portée par `libre-ai/information-watch` |
+| P02 — veille documentaire | `crates/p02-*`, contrat `p02-job-v1`, migrations `0001`, `0002` : **référence**, pas un produit de ce dépôt (`ADR-0054:39`) ; le serveur Bun `apps/p02-api`, présent au SHA, a été retiré de l'arbre le 2026-11-23 (décision du propriétaire en chat, `prd.md` § 8) | aucune exigence ni critère ici ; spec portée par `libre-ai/information-watch` |
 | P01 — accès aux sources | aucun code | chapitre de cadrage ; ligne de catalogue « neuf » |
 | P03 — entretien du corpus bibliographique | aucun code | chapitre de cadrage ; candidat « intégration » (Zotero AGPL-3.0 par son API seule, `ADR-0042` § 4) |
 | P05 — wiki | aucun code ; capacité `knowledge` absorbée en projection dans l'autorité (ADR-0041 § 4) | chapitre de cadrage ; candidat « intégration » |
