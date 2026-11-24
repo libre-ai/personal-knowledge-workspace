@@ -61,7 +61,7 @@ jobs:
           components: rustfmt, clippy, llvm-tools-preview
           targets: wasm32-unknown-unknown
       - name: Install licensing checker
-        run: pipx install reuse==6.2.0
+        run: pipx install reuse==6.3.0
       # The P02 database tests start throwaway PostgreSQL clusters and refuse
       # to pass without server binaries; the macOS image ships none (the
       # Linux composition job uses the image's PostgreSQL 16).
