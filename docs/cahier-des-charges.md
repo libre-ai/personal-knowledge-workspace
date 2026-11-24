@@ -716,7 +716,7 @@ RustCrypto `aes` 0.8.4 (patché), `aes-gcm` 0.10.3, `argon2` 0.6.0, `ghash`, `po
 `zeroize` ; `serde`, `serde_jcs` 0.2.0, `serde_json`, `sha2` 0.11.0 ; `wit-bindgen` 0.61.1,
 `wasmparser` et `wit-component` 0.253.0 ; Bun ≥ 1.4.0, TypeScript 7.0.2, Biome 2.5.3, React 19.2.7,
 `@playwright/test` 1.64.0 (e2e) et Playwright 1.61.1 (campagnes épinglées) ;
-`@bytecodealliance/jco-transpile` 0.4.2 ; Node 26.5.0 (build Gate B) ; Rust 1.97.0 +
+`@bytecodealliance/jco-transpile` 0.4.2 ; Node 26.5.0 (build Gate B) ; Rust 1.100.0 +
 `wasm32-unknown-unknown` (`rust-toolchain.toml`). Le graphe P02 (`tokio`, `hyper`, `rustls`,
 `tokio-postgres`, `blake3`, `flate2`, `url`) reste dans le verrou tant que le code de référence
 est dans l'arbre. À adopter par le jalon ADR-0057, sous CA-42 et CA-6 : `tauri` 2 (MIT ou
