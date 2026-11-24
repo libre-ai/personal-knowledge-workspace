@@ -7,7 +7,7 @@ verdict of `bun run check:dependency-policy`.
 
 | Crate | Scope | Features | Licence | Published | Rationale |
 | --- | --- | --- | --- | --- | --- |
-| `pulldown-cmark 0.13.4` | runtime | no defaults (drops `html` and `getopts`) | MIT | 2026-05-20 | CommonMark parser with offsets; no HTML renderer is compiled, so no path turns Markdown into HTML. `0.13.5` (2026-10-21) was newer than three days and is not adopted |
+| `pulldown-cmark 0.13.6` | runtime | no defaults (drops `html` and `getopts`) | MIT | 2026-10-30 | CommonMark parser with offsets; no HTML renderer is compiled, so no path turns Markdown into HTML. Moved from `0.13.4` on 2026-11-24 for RUSTSEC-2026-0414 (fixed in `0.13.5`) and RUSTSEC-2026-0433 (fixed in `0.13.6`) |
 | `unicase 2.10.0` | runtime, via `pulldown-cmark` | defaults | MIT OR Apache-2.0 | 2026-10-05 | transitive |
 | `unicode-normalization 0.1.25` | runtime | defaults | MIT OR Apache-2.0 | 2025-10-30 | NFD and combining marks for the index (NFC and NFD spellings are one term); already in the lock through the P02 graph |
 | `sha2 0.11.0` | runtime | no defaults | MIT OR Apache-2.0 | workspace pin of `notebook-core` | the revision of a note |
