@@ -63,7 +63,7 @@ Prévoir une session de une à deux heures, la machine branchée au secteur et l
 Prérequis :
 
 - macOS arm64 et outils de ligne de commande Xcode ;
-- Git et `rustup`, le dépôt imposant Rust `1.97.0` et `wasm32-unknown-unknown` ;
+- Git et `rustup`, le dépôt imposant Rust `1.100.0` et `wasm32-unknown-unknown` ;
 - le binaire Bun exact déclaré dans `toolchains/bun.json` ;
 - Node et les trois navigateurs dont versions, URL et SHA-256 sont déclarés dans `toolchains/notebook-qualification.json` ;
 - plusieurs dizaines de Gio libres pour le dépôt, Rust, Node, Playwright et les résultats.

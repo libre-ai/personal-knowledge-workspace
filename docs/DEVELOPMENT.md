@@ -15,7 +15,7 @@ L’installation est une étape explicite ; `check` ne télécharge plus de dép
 
 Les résultats observés sont dans [verification-status.json](verification-status.json). Les suites navigateur utilisant le même port doivent être exécutées séquentiellement. Un build local ne constitue ni publication de paquet, ni déploiement, ni validation de toutes les intégrations futures. Les README d’applications et les documents historiques décrivent aussi des étapes non réalisées ; leur ancien statut n’est pas une preuve actuelle.
 
-Rust1.97.0 et wasm32-unknown-unknown sont utilisés par les moteurs. Préchargez les dépendances avec `cargo fetch --locked`, puis lancez la vérification native avec `cargo test --locked --offline`. Les tests WASM doivent être distingués des tests natifs.
+Rust1.100.0 et wasm32-unknown-unknown sont utilisés par les moteurs. Préchargez les dépendances avec `cargo fetch --locked`, puis lancez la vérification native avec `cargo test --locked --offline`. Les tests WASM doivent être distingués des tests natifs.
 
 Le build courant sans sauvegarde utilise `bun run --cwd apps/notebook build`. La sauvegarde exige `NOTEBOOK_QUALIFICATION_NODE` pointant sur Node26.5.0 correspondant exactement au SHA du manifeste `toolchains/notebook-qualification.json`, puis `bun run --cwd apps/notebook build:gate-b`. La fonctionnalité chiffrée ne doit pas être annoncée à partir du seul build sans sauvegarde.
 
