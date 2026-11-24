@@ -6,6 +6,8 @@ The state authority is [`project.v1.yaml`](project.v1.yaml) (ADR-0020 §6.2) —
 
 ## Now — engine (L1-L3) and controlled export (L4-L5)
 
+Retired on 2026-11-23: `apps/notebook` left the tree (owner decision in chat). The L1-L6 items below targeted that app and no longer apply in this repository; they stay listed as history.
+
 - wire the block domain (`apps/notebook/src/domain/block.ts`) to real IndexedDB persistence with a non-test caller, proven by an e2e create→edit→link→search→delete (L1);
 - ship a minimal capture/edit screen — today the only screen in the app is the Gate B backup/restore host (L2);
 - mount local search (`SearchLocalIndex`) in the UI (L3);

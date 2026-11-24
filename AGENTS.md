@@ -17,8 +17,9 @@ Doctrine lives upstream: https://raw.githubusercontent.com/libre-ai/project-gove
   never edit that section by hand.
 - Product objectives and work packages have one source, `docs/prd.md`
   (criteria in `docs/cahier-des-charges.md`).
-- Recovered code (`apps/notebook`, `crates/notebook-core`) is not product
-  qualification.
+- Recovered code (`crates/notebook-core`) is not product qualification. The
+  recovered `apps/notebook` host was retired from the tree on 2026-11-23
+  (owner decision in chat).
 - Contract shapes are canonical in `libre-ai/schemas-and-contracts`, consumed
   pinned, never redefined here.
 
@@ -28,8 +29,8 @@ Doctrine lives upstream: https://raw.githubusercontent.com/libre-ai/project-gove
   https://raw.githubusercontent.com/libre-ai/project-governance/HEAD/docs/LOCAL-COMPOSITION.md
 - `bun run check` from this repository's root in the composition.
 - Native engine: `cargo fetch --locked`, then `cargo test --locked --offline`.
-- Build: `bun run --cwd apps/notebook build`; the backup build and browser
-  suite need the pinned Node of `toolchains/notebook-qualification.json`.
+- notebook-core WASM build: `bun run qualify:notebook-core-v2:build`; it needs
+  the pinned Node of `toolchains/notebook-qualification.json`.
 
 ## Working here
 

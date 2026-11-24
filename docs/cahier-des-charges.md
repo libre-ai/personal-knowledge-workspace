@@ -40,7 +40,7 @@ versionnées (I-13, I-15).
 | Rôle d'inventaire | `reserved-product-home`, `couche-1`, `lifecycle: active` | `ecosystem/repositories.v1.yaml` de l'autorité |
 | Fiche d'état | `maturity: idea`, `exposure: idea`, `confidence: medium`, `freshness 2026-10-07`, critère `qualified-scope` `pending`, `kill_predicates: []`, aucune mention de P01 à P07, aucune phase P04, aucun plafond de mémoire | `project.v1.yaml:27-29,31,33-41,48` ; `grep -c 'P0' project.v1.yaml` → 0 |
 | Workspace Rust | 5 crates : `notebook-core` (P04) ; `p02-domain`, `p02-fetch`, `p02-store`, `p02-worker` (P02, référence) ; aucun crate Tauri | `Cargo.toml:5-11` ; `grep -c tauri Cargo.lock` → 0 |
-| Applications Bun | `apps/notebook` (host de sauvegarde Gate B, React 19, désactivé par défaut) ; `apps/p02-api` (P02, référence) ; aucune coquille, aucun paquet CodeMirror | `package.json:62-65` ; `apps/notebook/README.md:3` ; `grep -c codemirror bun.lock` → 0 |
+| Applications Bun | `apps/notebook` (host de sauvegarde Gate B, React 19, désactivé par défaut) ; `apps/p02-api` (P02, référence) ; aucune coquille, aucun paquet CodeMirror. Relevé de 2026-11-24, sans réécrire le constat initial : `apps/p02-api` et `apps/notebook` ont été retirés de l'arbre le 2026-11-23 (décisions du propriétaire en chat), et le seul workspace Bun est `apps/desktop` | `package.json:62-65` ; `apps/notebook/README.md:3` ; `grep -c codemirror bun.lock` → 0 |
 | Contrats consommés | monde WIT `libre-ai:notebook-core@2.0.0` ; `p02-job-v1` vendorisé (référence P02) | `vendored/wit/notebook-core-v2/world.wit:1` ; `vendored/contracts/p02-job-v1/provenance.json` |
 | Patch vendorisé | `third_party/rustcrypto-aes-0.8.4` (sélection `fixslice64` sur wasm32, SHA-256 déclaré) appliqué à tout le graphe | `Cargo.toml:73-77` ; `crates/notebook-core/DEPENDENCIES.md:31-36` |
 | Qualification | harnais `tools/qualification/notebook-core-v2/` (34 fichiers), classes matérielles, toolchain Node 26.5.0 et Playwright 1.61.1 épinglés par SHA-256 ; aucun harnais de mesure de l'éditeur | `toolchains/notebook-qualification.json` ; `toolchains/notebook-resource-classes.json` |
@@ -60,7 +60,8 @@ versionnées (I-13, I-15).
   révisions immuables) contredit « le Markdown sur disque fait foi » (`ADR-0042:94-95`) ;
   `ROADMAP.md:9-13` planifie encore de brancher ce modèle. La décision propriétaire Y3 (PRD 11,
   2026-10-08) retire ce modèle comme autorité et conserve `notebook-core`. Question Q2 de la
-  mission.
+  mission. Le 2026-11-23, l'app `apps/notebook` et ce modèle ont été retirés de l'arbre (décision
+  du propriétaire en chat).
 - **Spécification héritée** — `docs/apps/notebook.md:6` cite ADR-0002 et des chemins de contrats
   qui vivent dans `schemas-and-contracts` ; c'est la spécification du code récupéré, antérieure à
   ADR-0042. `docs/product-readiness.md` est déclassé au profit de la fiche (le fichier reste dans l'arbre).
@@ -123,7 +124,7 @@ révision par ADR-0057.
 
 | Chapitre | Contenu au SHA | Statut de spec |
 | --- | --- | --- |
-| **P04 — notes et mémoire personnelle** | `crates/notebook-core` (scellement et ouverture, canonicalisation Context v2, bornes), `apps/notebook` (host Gate B sous feature gate), harnais de qualification ; cible : coquille Tauri 2 `apps/desktop`, cœur du dossier `crates/notebook-vault`, harnais `tools/qualification/p04-tauri` | exigences, critères d'acceptation : § 5, § 8 |
+| **P04 — notes et mémoire personnelle** | `crates/notebook-core` (scellement et ouverture, canonicalisation Context v2, bornes), `apps/notebook` (host Gate B sous feature gate, présent au SHA, retiré de l'arbre le 2026-11-23 par décision du propriétaire en chat), harnais de qualification ; cible : coquille Tauri 2 `apps/desktop`, cœur du dossier `crates/notebook-vault`, harnais `tools/qualification/p04-tauri` | exigences, critères d'acceptation : § 5, § 8 |
 | P02 — veille documentaire | `crates/p02-*`, contrat `p02-job-v1`, migrations `0001`, `0002` : **référence**, pas un produit de ce dépôt (`ADR-0054:39`) ; le serveur Bun `apps/p02-api`, présent au SHA, a été retiré de l'arbre le 2026-11-23 (décision du propriétaire en chat, `prd.md` § 8) | aucune exigence ni critère ici ; spec portée par `libre-ai/information-watch` |
 | P01 — accès aux sources | aucun code | chapitre de cadrage ; ligne de catalogue « neuf » |
 | P03 — entretien du corpus bibliographique | aucun code | chapitre de cadrage ; candidat « intégration » (Zotero AGPL-3.0 par son API seule, `ADR-0042` § 4) |
@@ -194,7 +195,8 @@ P04, existant :
   (`world.wit:53-58` ; `crates/notebook-core/README.md:8-9`). Conséquence : la lecture et
   l'écriture du dossier, l'analyse Markdown et l'index ne vivent pas dans `notebook-core` mais
   dans un crate natif distinct, `notebook-vault` (EF-P04-9).
-- EF-P04-3 Le host de sauvegarde `apps/notebook` MUST rester désactivé sans
+- EF-P04-3 [retirée le 2026-11-23 : `apps/notebook` a quitté l'arbre, décision du propriétaire en
+  chat ; l'exigence n'a plus d'objet] Le host de sauvegarde `apps/notebook` MUST rester désactivé sans
   `NOTEBOOK_BACKUP_FEATURE_ENABLED=1`, MUST n'utiliser que la fixture publique avant décision de
   release, MUST créer un worker neuf par opération et le terminer dans tous les cas, et MUST
   afficher le code de récupération seulement après persistance chiffrée et déclenchement du
@@ -262,7 +264,8 @@ Chapitres sans code (exigences de cadrage, pas de critère) :
   un journal, un message d'erreur ou un artefact (PRD 11 NFR-15 ; `crates/notebook-core/src/model.rs:41-50`).
 - ENF-2 **Sécurité** : CSP de `web-platform` sur toute surface HTML servie par Bun, seul
   relâchement nommé `'wasm-unsafe-eval'`, échec fermé si la base attendue manque (I-37 ;
-  `apps/notebook/src/server/handler.ts:75-81`) ; dans la coquille Tauri, CSP `default-src 'none'`
+  `apps/notebook/src/server/handler.ts:75-81`, seule surface concernée, retirée de l'arbre le
+  2026-11-23) ; dans la coquille Tauri, CSP `default-src 'none'`
   élargie aux seules origines du schéma privé (EF-P04-8, contrôle 3).
 - ENF-3 **Sécurité** : le workspace déclare `unsafe_code = "forbid"` et `unwrap`, `expect`,
   `panic`, `todo`, `unimplemented`, `indexing_slicing` en `deny` (`Cargo.toml:81-90`) ;
@@ -313,7 +316,7 @@ Chapitres sans code (exigences de cadrage, pas de critère) :
 | Interface | Direction | Format | Source |
 | --- | --- | --- | --- |
 | Cœur de sauvegarde | hôte → WASM | WIT `libre-ai:notebook-core@2.0.0` : `canonicalize-context`, `seal-backup`, `open-backup` ; `result<_, error-code>` | `vendored/wit/notebook-core-v2/world.wit` |
-| Enveloppe de sauvegarde | WASM → fichier | `libre-ai.notebook-backup.v2` (JSON canonique : `schemaVersion`, `id`, `cipher`, `kdf`, `nonce`, `ciphertext`, `digest`) ; téléchargement `notebook-backup.lai` ; secret `libre-ai.recovery-secret-code.v1` (32 hex minuscules) | `crates/notebook-core/src/model.rs:7-10,78-95` ; `apps/notebook/README.md:14` |
+| Enveloppe de sauvegarde | WASM → fichier | `libre-ai.notebook-backup.v2` (JSON canonique : `schemaVersion`, `id`, `cipher`, `kdf`, `nonce`, `ciphertext`, `digest`) ; téléchargement `notebook-backup.lai` ; secret `libre-ai.recovery-secret-code.v1` (32 hex minuscules) | `crates/notebook-core/src/model.rs:7-10,78-95` ; `apps/notebook/README.md:14` (retiré de l'arbre le 2026-11-23) |
 | Document de contexte | P04 → tiers | `context-document.v2` (schéma dans `schemas-and-contracts`) canonicalisé RFC 8785 ; bornes 1 000 blocs, 16 384 liens, profondeur 64, 100 000 nœuds | `crates/notebook-core/src/validate.rs:20-27` |
 | Pont Tauri (cible) | front → processus Rust | commandes énumérées par la capacité, deny-by-default : `open_vault` (dossier), `read_note` (octets exacts), `write_note` (octets exacts, écriture atomique, révision attendue), `render_preview` (arbre d'attributs de l'aperçu, jamais du HTML interprété), `search` (requête, résultats), `rebuild_index` ; événements `vault_changed` (chemin, empreinte) ; refus fermés `vault.*` ; aucune chaîne libre dans un code de refus | EF-P04-8, EF-P04-9 ; CA-39 |
 | Front de la coquille (cible) | processus Rust → WKWebView | front servi depuis la mémoire par un schéma privé ; CSP `default-src 'none'` élargie aux origines du schéma ; magasin non persistant | EF-P04-8 ; CA-37 |
@@ -328,7 +331,7 @@ Menaces prises en compte, avec la parade existante ou exigée :
 | Menace | Parade | État au SHA |
 | --- | --- | --- |
 | Oracle sur le secret de récupération | secret invalide remplacé par une constante et passé au même KDF | réalisé (`crates/notebook-core/src/lib.rs:139-150`) |
-| Fuite de plaintext dans le navigateur (host Gate B) | worker jetable par opération, transfert d'ownership, effacement best-effort, aucune persistance du recovery | réalisé sur fixture ; effacement physique non prouvé (`apps/notebook/README.md:27`) |
+| Fuite de plaintext dans le navigateur (host Gate B) | worker jetable par opération, transfert d'ownership, effacement best-effort, aucune persistance du recovery | réalisé sur fixture ; effacement physique non prouvé (`apps/notebook/README.md:27`) ; host retiré de l'arbre le 2026-11-23 (décision du propriétaire en chat) |
 | Fuite de contenu par les journaux | erreurs sans donnée ; `Debug` d'`OpenedBackup` expose `schema_version`, `id`, `digest` et la taille (`model.rs:41-50`) ; scan des journaux à construire | partiel (CA-7) |
 | Chemin ou nom d'utilisateur embarqué dans un artefact | remap et scan des artefacts (Y40) | réalisé (CA-5) ; à étendre au bundle de la coquille |
 | Dépendance cryptographique altérée | copie vendorisée avec SHA-256 déclaré et diff d'une ligne ; `cargo deny` sources | réalisé ; gate de provenance I-28 à vérifier (AB-4) |
@@ -408,21 +411,25 @@ P04, existant :
 - CA-10 [état : vert] Le composant construit n'a aucun import et exporte exactement le monde
   `notebook-core`. Validation : `node scripts/check-component-encoding.ts` et l'inspection
   `wasmparser` du build de qualification rendent 0 import.
-- CA-11 [état : vert] Le host de sauvegarde scelle, télécharge, stage et restaure sur fixture
+- CA-11 [état : retiré le 2026-11-23 ; vert jusque-là : `apps/notebook`, sa suite e2e et l'étape
+  WebKit du workflow macOS ont quitté l'arbre, décision du propriétaire en chat] Le host de
+  sauvegarde scelle, télécharge, stage et restaure sur fixture
   publique, refuse un mauvais secret sans libérer de plaintext et nettoie un staging interrompu,
-  dans Chromium, Firefox et WebKit. Validation : `bun run --cwd apps/notebook test:e2e` rend 17
+  dans Chromium, Firefox et WebKit. Validation : le script `test:e2e` de `apps/notebook` rendait 17
   `passed` sous 5 projets (`grep -c 'name:' apps/notebook/playwright.config.ts` → 5 ; 5 tests
   joués sous `chromium`, `firefox` et `webkit`, plus 1 sous `webkit-storage-estimate-removed` et 1
   sous `chromium-no-js`) ; le workflow `Notebook WebKit macOS` rejoue `--project=webkit` sur
   macOS ; compte lu dans le journal du run `Code validation` du même SHA par `gh run view ID --log`.
-- CA-12 [état : vert] La CSP servie par le host contient `script-src 'self' 'wasm-unsafe-eval'` et
+- CA-12 [état : retiré le 2026-11-23 avec `apps/notebook` ; vert jusque-là] La CSP servie par le host contient `script-src 'self' 'wasm-unsafe-eval'` et
   rien d'autre comme source de script. Validation : test
   `serves the strict content security policy on every product surface` vert.
 - CA-13 [état : partiel] L'application n'émet aucune requête sortante. Validation :
-  `bun run check:no-transmission` vert avec la seule exemption `notebook-core-worker.ts`
-  (existant) ; capture réseau d'une session e2e de 30 minutes dans la coquille → 0 requête hors du
+  `bun run check:no-transmission` vert, sans exemption, sur la racine `apps/desktop/src` (depuis
+  le 2026-11-23 ; avant cette date, sur `apps/notebook/src` avec la seule exemption
+  `notebook-core-worker.ts`, retirés de l'arbre avec l'app) ; capture réseau d'une session e2e de 30 minutes dans la coquille → 0 requête hors du
   schéma privé (à construire : PRD 11 AT-35 ; CA-38 en porte le vecteur rouge).
-- CA-14 [état : rouge] L'empreinte qualifiée du cœur correspond au cœur livré, ou les campagnes
+- CA-14 [état : retiré le 2026-11-23 ; rouge jusque-là : les deux campagnes produit ont quitté
+  l'arbre avec `apps/notebook`, décision du propriétaire en chat] L'empreinte qualifiée du cœur correspond au cœur livré, ou les campagnes
   produit refusent la build. Validation : `QUALIFIED_CORE_SHA256` égale le SHA-256 du cœur
   transpilé mesuré après rejeu de `qualify:notebook-product-host:faults` et `:storage` sur la
   classe `desktop-arm64-high-memory-reference` (décision Y41) ; sinon les campagnes sortent non
@@ -630,14 +637,18 @@ du propriétaire du 2026-10-24, avant la série du paquet WP-5) :
   catalogue passe en « abandon ». Validation : une entrée de `docs/decisions/DECISION-REGISTER.md`
   de `project-governance` nomme le P-xx et le retrait ; sans cette entrée, le retrait n'a pas eu
   lieu.
-- AB-3 Si les campagnes Gate B rejouées sur la classe `desktop-arm64-high-memory-reference` (CA-14)
+- AB-3 [sans objet depuis le 2026-11-23 : le host web `apps/notebook` et ses campagnes ont été
+  retirés de l'arbre par décision du propriétaire en chat, sans que la condition ci-dessous ait
+  été mesurée ; `notebook-core` est conservé] Si les campagnes Gate B rejouées sur la classe `desktop-arm64-high-memory-reference` (CA-14)
   échouent deux fois de suite sur deux candidats corrigés, pour une cause autre que le refus par
   empreinte historique `QUALIFIED_CORE_SHA256` (décision Y41), le host web `apps/notebook` est
   retiré et seul le cœur `notebook-core` est conservé comme bibliothèque de la réplique chiffrée.
   Validation : deux rapports de campagne consécutifs liés au commit et au SHA-256 du manifeste de
   ressources (`docs/apps/notebook-resource-floor.md:50`), chacun en échec avec un code de refus
   différent du refus d'empreinte.
-- AB-4 Si, à la levée du feature gate `NOTEBOOK_BACKUP_FEATURE_ENABLED`, le patch vendorisé
+- AB-4 [sans objet depuis le 2026-11-23 : le feature gate vivait dans `apps/notebook`, retiré de
+  l'arbre par décision du propriétaire en chat ; il n'y a plus de chemin de sauvegarde chiffrée
+  dans le navigateur] Si, à la levée du feature gate `NOTEBOOK_BACKUP_FEATURE_ENABLED`, le patch vendorisé
   `third_party/rustcrypto-aes-0.8.4` n'a toujours pas de gate de provenance I-28 dans
   `bun run check` (archive téléchargée, SHA-256 vérifié, `diff -r`) et n'est pas retiré au profit
   d'une version publiée équivalente, le chemin de sauvegarde chiffrée dans le navigateur est
@@ -679,7 +690,8 @@ Internes (libre-ai) :
   éventuel du code P02 de ce dépôt par import avec provenance ; le spike `@wdio/tauri-service` est
   fait une fois pour P02 et son verdict vaut pour la flotte (`ADR-0057:73`).
 - `application-development-toolkit` : `@libre-ai/ui` (1 import), `@libre-ai/web-platform`
-  (5 imports : CSP, handler) ; licence Apache-2.0 de ces paquets à confronter à EUPL-1.2 du dépôt.
+  (5 imports : CSP, handler), tous dans `apps/notebook`, retiré de l'arbre le 2026-11-23 : plus
+  aucun import depuis cette date ; licence Apache-2.0 de ces paquets à confronter à EUPL-1.2 du dépôt.
 - Bloc `overrides` de `package.json:10-23` : 11 clés `@libre-ai/*`, toutes de nature `override` ;
   7 ni déclarées ni importées au SHA (CA-8).
 - Archivé : `ai-practice-workbench` (ancien porteur P07) — import avec provenance seulement.
@@ -698,7 +710,8 @@ Chevauchements avec d'autres specs, nommés sans demande de fusion :
 - `square-control` (P40) : même coquille Tauri 2 à sa première fenêtre (`ADR-0057:40`) ; exempté
   d'extension (`ADR-0042:235-272`, § 9).
 
-Externes principales (`Cargo.toml:20-58` ; `package.json:24-32` ; `apps/notebook/package.json`) :
+Externes principales (`Cargo.toml:20-58` ; `package.json:24-32` ; `apps/notebook/package.json`,
+retiré de l'arbre le 2026-11-23 avec React et `@playwright/test` côté app) :
 RustCrypto `aes` 0.8.4 (patché), `aes-gcm` 0.10.3, `argon2` 0.6.0, `ghash`, `polyval`, `subtle`,
 `zeroize` ; `serde`, `serde_jcs` 0.2.0, `serde_json`, `sha2` 0.11.0 ; `wit-bindgen` 0.61.1,
 `wasmparser` et `wit-component` 0.253.0 ; Bun ≥ 1.4.0, TypeScript 7.0.2, Biome 2.5.3, React 19.2.7,
@@ -718,8 +731,8 @@ Apache-2.0, dernière release `tauri-cli-v2.12.4` du 2026-10-21, `ADR-0057:27`),
 | --- | --- | --- | --- |
 | R1 | NFR-10 rouge sous Tauri : 413 Mio mesurés sans index sur la voie (b), 240 Mio de processus GPU WebKit (`ADR-0044:45`), contre un plafond de 500 Mio avec index ; « risque élevé de rouge » écrit dans l'option retenue par le propriétaire (`ADR-0057:92`) | retour au natif pour P04 par ADR ; le code de l'éditeur avance sous ce risque nommé | CA-44 ; plafond figé (ENF-7) ; protocole commité d'abord (CA-36) |
 | R2 | Accessibilité rouge : 0,54 % du texte exposé sur la voie (b) (`ADR-0044:47`) ; l'arbre doit être maintenu par le front | même décision de surface | EF-P04-11 ; CA-44 |
-| R3 | Modèle par blocs encore présent et planifié par `ROADMAP.md:9-13` alors que Y3 le retire comme autorité | double modèle, format verrouillé | Q2 de la mission ; EF-P04-4 ; CA-15 |
-| R4 | Campagnes produit refusant la build migrée (`QUALIFIED_CORE_SHA256` historique) | Gate B non rejouable sur le code courant tant que le matériel de référence n'a pas rejoué | Q9 de la mission ; CA-14 ; AB-3 |
+| R3 | Modèle par blocs encore présent et planifié par `ROADMAP.md:9-13` alors que Y3 le retire comme autorité ; clos le 2026-11-23, le modèle a quitté l'arbre avec `apps/notebook` (décision du propriétaire en chat) | double modèle, format verrouillé | Q2 de la mission ; EF-P04-4 ; CA-15 |
+| R4 | Campagnes produit refusant la build migrée (`QUALIFIED_CORE_SHA256` historique) ; clos le 2026-11-23, les campagnes ont quitté l'arbre avec `apps/notebook` (décision du propriétaire en chat) | Gate B non rejouable sur le code courant tant que le matériel de référence n'a pas rejoué | Q9 de la mission ; CA-14 ; AB-3 |
 | R5 | Vérité terrain à construire (CR-10k, oracles) avant toute mesure | seuils figés sans mesure sous Tauri | CA-34, CA-35, CA-36 |
 | R6 | Machine de mesure : les relevés d'ADR-0044 sont faits sur 36 Gio / 14 CPU, la classe de référence du PRD 11 est 32 Gio / 12 CPU | seuils non transposés à la machine de référence | la machine est déclarée dans `PROTOCOL.md` (CA-36) et dans chaque rapport (CA-43) |
 | R7 | Code P02 de référence dans l'arbre : 43 mentions, 4 crates, 1 application, tests dans `bun run check` | charge de `bun run check` et de `Cargo.lock` sur du code sans critère ici | § 4.1 ; retrait = décision distincte, import avec provenance par `information-watch` |

@@ -1,4 +1,10 @@
 # SPDX-License-Identifier: EUPL-1.2
+# The macOS arm64 run of the composition check, the native tests and the
+# notebook-core WASM build. Its WebKit browser steps served apps/notebook,
+# retired from the tree on 2026-11-23 (owner decision). The file name, the
+# workflow name and the job id are kept: `webkit-macos` is a required status
+# check of the served branch's ruleset, docs/cahier-des-charges.md (CA-3, CA-4)
+# cites the file and the workflow name, and renaming them is the owner's change.
 name: Notebook WebKit macOS
 
 'on':
@@ -72,7 +78,7 @@ jobs:
         run: |
           brew install postgresql@16
           echo "P02_PG_BINDIR=$(brew --prefix postgresql@16)/bin" >> "$GITHUB_ENV"
-      - name: Install frozen composition and check Notebook
+      - name: Install frozen composition and run the root check
         run: |
           python3 -B tooling/.github/composition/run-composition.py \
             --target personal-knowledge-workspace --revision "$INPUT_TARGET_REF" \
@@ -90,33 +96,13 @@ jobs:
         run: |
           brew install postgresql@16
           echo "P02_PG_BINDIR=$(brew --prefix postgresql@16)/bin" >> "$GITHUB_ENV"
-      - name: Run native Notebook tests
+      - name: Run native workspace tests
         run: |
           python3 -B tooling/.github/composition/check-products.py \
             --root "$GITHUB_WORKSPACE/composition" --target personal-knowledge-workspace --gate native \
             --bun "$(command -v bun)" --cargo "$(command -v cargo)" --node "$(command -v node)"
-      - name: Build current Notebook WASM
+      - name: Build current notebook-core WASM
         run: |
           python3 -B tooling/.github/composition/check-products.py \
             --root "$GITHUB_WORKSPACE/composition" --target personal-knowledge-workspace --gate wasm \
             --bun "$(command -v bun)" --cargo "$(command -v cargo)" --node "$(command -v node)"
-      - name: Install WebKit for the locked Playwright version
-        working-directory: composition/personal-knowledge-workspace/apps/notebook
-        run: bun x --no-install playwright install webkit
-      - name: Run positive WebKit browser tests
-        working-directory: composition/personal-knowledge-workspace
-        run: |
-          python3 - <<'PY'
-          import os
-          import subprocess
-          environment = os.environ.copy()
-          # Same narrow Rust-action normalization as the pinned product runner.
-          # Unexpected controls remain visible to the build's rejection checks.
-          if environment.get('CARGO_INCREMENTAL') == '0':
-              environment.pop('CARGO_INCREMENTAL')
-          subprocess.run(
-              ['bun', 'run', '--cwd', 'apps/notebook', 'test:e2e',
-               '--project=webkit', '--workers=1'],
-              env=environment, check=True, timeout=1800,
-          )
-          PY

@@ -1,6 +1,9 @@
 # Notebook
 
-- **Path:** `apps/notebook`
+> Retired on 2026-11-23: `apps/notebook` left the tree (owner decision in chat). This specification
+> of the recovered code is kept as history; it describes no code of the current tree.
+
+- **Path:** `apps/notebook` (retired on 2026-11-23)
 - **Owner:** Experiences / Notebook
 - **Runtime:** Bun/React PWA with IndexedDB and Web Crypto
 - **Tenant model:** personal local-only workspace in v1, accepted by ADR-0002

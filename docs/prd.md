@@ -66,7 +66,8 @@ propriétaire » (`ADR-0042:78-80`).
 - Le code récupéré avant la bascule ne résout pas ce problème : modèle par blocs en IndexedDB
   (`apps/notebook/src/domain/block.ts`) contraire à « le Markdown sur disque fait foi »
   (`ADR-0042:94-95`). La décision propriétaire Y3 (PRD 11, 2026-10-08) retire ce modèle comme
-  autorité et conserve `notebook-core`.
+  autorité et conserve `notebook-core`. L'app `apps/notebook`, qui portait ce modèle, a été
+  retirée de l'arbre le 2026-11-23 (décision du propriétaire en chat) ; `notebook-core` reste.
 - Aucun éditeur n'existe dans le dépôt : 0 fichier Swift (`git ls-files | grep -c '\.swift$'` → 0),
   aucun paquet CodeMirror dans `bun.lock`, aucun crate Tauri dans `Cargo.lock`. Les mesures qui
   fondaient ADR-0044 ont été faites sur des prototypes qui n'existent plus sur le poste
@@ -208,7 +209,8 @@ mission, dérogation à I-09 à nommer). **Fusionner avec** `information-feed-fi
 sans objet. Chevauchements nommés sans fusion de spec (liste complète avec sources :
 `cahier-des-charges.md` § 10) : `information-watch` (P02, contrat `knowledge-excerpt.v1`),
 `schemas-and-contracts` (foyer de `notebook-backup.v2`, `context-document.v2`),
-`application-development-toolkit` (`@libre-ai/ui`, `@libre-ai/web-platform`),
+`application-development-toolkit` (`@libre-ai/ui`, `@libre-ai/web-platform`, consommés par
+`apps/notebook` jusqu'à son retrait de l'arbre le 2026-11-23),
 `collaborative-data-sync` (sync chiffrée, hors v1), `ai-practice-workbench` (ancien porteur P07),
 `learning-session-facilitation` (P39 et P07), `organization-data-lifecycle` (P38),
 `signalement` (capture par extension), `square-control` (P40, exempté d'extension, coquille Tauri 2

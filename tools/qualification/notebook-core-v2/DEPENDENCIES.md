@@ -27,9 +27,9 @@ The harness was qualified with `@playwright/test 1.61.1`, which executes local C
 On 2026-10-09 the workspace moved to `@playwright/test 1.62.1`, because the Chromium revision 1228
 installed by 1.61.1 intermittently dies on `SIGTRAP` on hosted `ubuntu-24.04` runners. The
 qualification manifest was deliberately left on the 1.61.1 evidence toolchain: until this harness is
-re-qualified, `check-toolchain.ts` fails closed on the Playwright version and descriptor. A
-re-qualification must also re-audit the internal `killForTests` channel used by the product-host fault
-campaign.
+re-qualified, `check-toolchain.ts` fails closed on the Playwright version and descriptor. The
+internal `killForTests` channel was used only by the product-host fault campaign, retired with
+`apps/notebook` on 2026-11-23 (owner decision in chat).
 
 Generation Q moves the workspace to `@playwright/test 1.64.0`, which contains the change that closed
 microsoft/playwright#42731 (first Firefox navigation to a `Cross-Origin-Opener-Policy: same-origin`

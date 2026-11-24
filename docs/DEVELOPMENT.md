@@ -3,7 +3,7 @@
 
 # Développement local
 
-Le code récupéré est intégré dans `apps/notebook, crates/notebook-core`. Les sous-paquets conservent leurs noms et versions propres ; ce dépôt n’est pas un paquet monolithique. La provenance par fichier et les notices historiques sont dans `code-recovery-provenance.json` et `source-licensing/`.
+Le code récupéré est intégré dans `crates/notebook-core`. L'hôte `apps/notebook`, récupéré avec lui, a été retiré de l'arbre le 2026-11-23 (décision du propriétaire en chat). Les sous-paquets conservent leurs noms et versions propres ; ce dépôt n’est pas un paquet monolithique. La provenance par fichier et les notices historiques sont dans `code-recovery-provenance.json` et `source-licensing/`.
 
 ## Installer et vérifier
 
@@ -17,12 +17,8 @@ Les résultats observés sont dans [verification-status.json](verification-statu
 
 Rust1.100.0 et wasm32-unknown-unknown sont utilisés par les moteurs. Préchargez les dépendances avec `cargo fetch --locked`, puis lancez la vérification native avec `cargo test --locked --offline`. Les tests WASM doivent être distingués des tests natifs.
 
-Le build courant sans sauvegarde utilise `bun run --cwd apps/notebook build`. La sauvegarde exige `NOTEBOOK_QUALIFICATION_NODE` pointant sur Node26.5.0 correspondant exactement au SHA du manifeste `toolchains/notebook-qualification.json`, puis `bun run --cwd apps/notebook build:gate-b`. La fonctionnalité chiffrée ne doit pas être annoncée à partir du seul build sans sauvegarde.
-
-Le test courant est `NOTEBOOK_QUALIFICATION_NODE=/chemin/vers/node bun run --cwd apps/notebook test:e2e --workers=1`. Le chemin est fourni par l’utilisateur ; il doit correspondre au binaire épinglé. Voir [les limites de la preuve du build](notebook-build-migration.md).
+Le build WASM de `notebook-core` (`bun run qualify:notebook-core-v2:build`) exige le Node 26.5.0 correspondant exactement au SHA du manifeste `toolchains/notebook-qualification.json`. Voir [les limites de la preuve du build](notebook-build-migration.md).
 
 ## Navigateurs et sauvegardes
 
-La sauvegarde exige l’API native d’estimation du stockage, avec au moins 512 Mio disponibles. Si cette capacité manque, l’application désactive la création et la restauration avant de créer un worker ; aucun quota de remplacement n’est inventé.
-
-La CI Linux vérifie les parcours complets sous Chromium et Firefox, ainsi que le refus explicite du WebKit Linux testé, qui ne fournit pas cette API. Une CI macOS distincte vérifie les parcours complets WebKit. Les deux workflows doivent réussir sur le même commit ; un refus Linux réussi ne prouve pas le fonctionnement de la sauvegarde sur ce navigateur.
+Cette section décrivait l'hôte de sauvegarde `apps/notebook` : son build avec et sans sauvegarde, sa suite navigateur sous Chromium, Firefox et WebKit, et le workflow macOS qui rejouait WebKit. L'hôte a été retiré de l'arbre le 2026-11-23 (décision du propriétaire en chat) ; le texte reste lisible dans l'historique git. Le workflow macOS garde le contrôle racine, les tests natifs et le build WASM de `notebook-core`.
